@@ -57,7 +57,7 @@
 <div style="font-size:1.4rem;font-weight:700;color:#2e7d32;margin-top:5px;"><span id="right-box-value">0.00</span> BP</div>
 </div>
 </div>
-<div id="monthly-summary" class="month-grid" style="display:none;"></div><div class="section-title"><span class="s-icon">🧾</span><h4>All Bills</h4></div><div id="detail-bill-list"></div></div>
+<div id="monthly-summary" class="month-grid"></div><div class="section-title"><span class="s-icon">🧾</span><h4>All Bills</h4></div><div id="detail-bill-list"></div></div>
 </div>
 </div>
 <div id="requirement" class="tab-content">
