@@ -1,197 +1,36 @@
-import { db } from './db.js';
-import readXlsxFile from 'read-excel-file';
-import * as pdfjsLib from 'pdfjs-dist';
+async function handleFileUpload(e){const f=e.target.files[0];if(!f)return;document.getElementById('debug-box').innerText='';document.getElementById('upload-status').innerText=`📂 Reading ${f.name}...`;document.getElementById('upload-status').style.color='blue';let items=[];try{if(f.name.endsWith('.pdf'))items=await parsePDF(f);else items=await parseExcel(f);if(items.length>0){await DB.clear('products');for(let i of items)await DB.run('products',i);document.getElementById('upload-status').innerText=`✅ Loaded ${items.length} PDF products.`;document.getElementById('upload-status').style.color='green';await refreshDropdownCache()}else{document.getElementById('upload-status').innerText='⚠️ 0 Products found.';document.getElementById('upload-status').style.color='red'}}catch(err){document.getElementById('upload-status').innerText=`❌ ${err.message}`;document.getElementById('upload-status').style.color='red'}}
 
-// CRITICAL FIX: Disable worker to prevent blocking in Capacitor/Local environments
-pdfjsLib.GlobalWorkerOptions.workerSrc = ''; 
+async function parsePDF(f){const ab=await f.arrayBuffer();pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';const pdf=await pdfjsLib.getDocument({data:ab}).promise;let items=[],rt='';for(let i=1;i<=pdf.numPages;i++){const p=await pdf.getPage(i),tc=await p.getTextContent(),ls={};tc.items.forEach(it=>{if(!it.str)return;const y=Math.round(it.transform[5]);if(!ls[y])ls[y]=[];ls[y].push({x:it.transform[4],str:it.str})});Object.keys(ls).sort((a,b)=>b-a).forEach(y=>{const lt=ls[y].sort((a,b)=>a.x-b.x).map(i=>i.str).join(' ').trim();if(lt)rt+=lt+'\n'})}if(!rt.trim())return[];rt.split('\n').forEach(l=>{l=l.replace(/^\d+\s*/,'');const n=l.match(/[\d,]+\.?\d*/g);if(n&&n.length>=3){const bp=parseFloat(n[n.length-1].replace(/,/g,'')),sp=parseFloat(n[n.length-2].replace(/,/g,'')),mrp=parseFloat(n[n.length-3].replace(/,/g,'')),tln=n[n.length-3],ni=l.lastIndexOf(tln);let nm=l.substring(0,ni).replace(/[-–—:.\s]+$/,'').trim();if(nm&&nm.length>1&&!nm.match(/^\d+$/))items.push({item_name:nm,mrp,sp,bp})}});return items}
 
-function updateStatus(message, color = 'black') {
-    const statusEl = document.getElementById('upload-status');
-    statusEl.innerText = message;
-    statusEl.style.color = color;
-}
+function parseExcel(f){return new Promise(r=>{const rd=new FileReader();rd.onload=function(e){const d=new Uint8Array(e.target.result),wb=XLSX.read(d,{type:'array'}),sh=wb.Sheets[wb.SheetNames[0]],j=XLSX.utils.sheet_to_json(sh,{header:1});r(j.slice(1).filter(r=>r.length>=4&&r[0]).map(r=>({item_name:String(r[0]).trim(),mrp:parseFloat(String(r[1]).replace(/,/g,''))||0,sp:parseFloat(String(r[2]).replace(/,/g,''))||0,bp:parseFloat(String(r[3]).replace(/,/g,''))||0})))};rd.readAsArrayBuffer(f)})}
 
-function updateDebug(message) {
-    const debugBox = document.getElementById('debug-box');
-    debugBox.innerText += message + "\n";
-}
+async function clearProducts(){if(confirm('⚠️ Clear all PDF/Excel products?\n\n✅ Manual products (⭐) will NOT be deleted.')){await DB.clear('products');document.getElementById('upload-status').innerText='✅ PDF products cleared.';await refreshDropdownCache()}}
 
-window.handleFileUpload = async function(event) {
-    const file = event.target.files[0];
-    if (!file) return;
-    
-    // Clear previous debug logs
-    document.getElementById('debug-box').innerText = ""; 
-    
-    updateStatus(`📂 Reading file: ${file.name}...`, 'blue');
-    updateDebug(`--- STARTING UPLOAD: ${file.name} ---`);
-    
-    let items = [];
-    try {
-        const ext = file.name.split('.').pop().toLowerCase();
-        
-        if (ext === 'pdf') {
-            updateStatus('⏳ Parsing PDF... (Click "Show Raw PDF Text" to see progress)', 'orange');
-            items = await parsePDF(file);
-        } else if (ext === 'xlsx' || ext === 'xls') {
-            items = await parseExcel(file);
-        } else if (ext === 'csv') {
-            items = await parseCSV(file);
-        } else if (ext === 'html' || ext === 'htm') {
-            items = await parseHTML(file);
-        } else {
-            throw new Error('Unsupported format.');
-        }
-        
-        if (items.length > 0) {
-            updateStatus(`💾 Saving ${items.length} products to database...`, 'orange');
-            await db.execute(`DELETE FROM products`);
-            
-            for (let i = 0; i < items.length; i++) {
-                const item = items[i];
-                await db.run(`INSERT INTO products (item_name, mrp, sp, bp) VALUES (?, ?, ?, ?)`, 
-                    [item.item_name, item.mrp, item.sp, item.bp]);
-            }
-            
-            updateStatus(`✅ SUCCESS! Loaded ${items.length} products.`, 'green');
-            updateDebug(`✅ SUCCESS! Saved ${items.length} products to database.`);
-            if (window.loadDatalists) window.loadDatalists();
-        } else {
-            updateStatus('⚠️ 0 Products found. Click "Show Raw PDF Text" to see why.', 'red');
-            updateDebug(`⚠️ PARSER FOUND 0 ITEMS. See raw text above to check if PDF is an image.`);
-        }
-    } catch (err) {
-        console.error('Upload Error:', err);
-        updateStatus(`❌ Error: ${err.message}`, 'red');
-        updateDebug(`❌ FATAL ERROR: ${err.message}`);
-    }
-};
+async function exportData(){try{const se=document.getElementById('backup-status');se.innerText='⏳ Creating backup...';se.style.color='orange';let bd={};if(DB.isCapacitor&&DB.conn)bd={version:'2.0',exportDate:new Date().toISOString(),customers:await DB.query('customers'),products:await DB.query('products'),manual_products:await DB.query('manual_products'),bills:await DB.query('bills'),bill_items:await DB.query('bill_items'),requirements:await DB.query('requirements')};else bd={version:'2.0',exportDate:new Date().toISOString(),...DB.data};const js=JSON.stringify(bd,null,2),fn=`SKA_Backup_${new Date().toISOString().split('T')[0]}.json`;if(window.Capacitor&&window.Capacitor.Plugins&&window.Capacitor.Plugins.Filesystem){try{const FS=window.Capacitor.Plugins.Filesystem,Dir=FS.Directory||{Documents:'DOCUMENTS'},Enc=FS.Encoding||{UTF8:'utf8'};await FS.writeFile({path:fn,data:js,directory:Dir.Documents||'DOCUMENTS',encoding:Enc.UTF8||'utf8',recursive:true});const uri=await FS.getUri({path:fn,directory:Dir.Documents||'DOCUMENTS'});if(window.Capacitor.Plugins.Share)await window.Capacitor.Plugins.Share.share({title:'SK Aayurveda Backup',text:`Backup: ${bd.customers.length} customers`,url:uri.uri,dialogTitle:'Save Backup'});se.innerText='✅ Backup saved!';se.style.color='green';alert(`✅ Saved!\n\n📁 ${fn}\n📍 Documents folder`);return}catch(e){console.log(e)}}if(window.Capacitor&&window.Capacitor.Plugins&&window.Capacitor.Plugins.Share){try{await window.Capacitor.Plugins.Share.share({title:'SK Aayurveda Backup',text:js,dialogTitle:'Share Backup'});se.innerText='✅ Backup shared!';se.style.color='green';return}catch(e){}}const bl=new Blob([js],{type:'application/json;charset=utf-8'}),fl=new File([bl],fn,{type:'application/json;charset=utf-8'});if(navigator.canShare&&navigator.canShare({files:[fl]})){await navigator.share({files:[fl],title:'Backup'});se.innerText='✅ Shared!';se.style.color='green'}else{const u=URL.createObjectURL(bl),a=document.createElement('a');a.href=u;a.download=fn;document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(u);se.innerText=`✅ Downloaded: ${fn}`;se.style.color='green'}}catch(e){document.getElementById('backup-status').innerText=`❌ ${e.message}`;document.getElementById('backup-status').style.color='red';alert('❌ Export failed: '+e.message)}}
 
-// --- KEVA-OPTIMIZED PDF PARSER ---
-async function parsePDF(file) {
-    const arrayBuffer = await file.arrayBuffer();
-    
-    // Force main-thread execution to bypass local file blocking
-    const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer, disableWorker: true });
-    const pdf = await loadingTask.promise;
-    
-    let items = [];
-    let rawText = "";
-    
-    updateDebug(`PDF has ${pdf.numPages} pages. Extracting text...`);
-    
-    for (let i = 1; i <= pdf.numPages; i++) {
-        const page = await pdf.getPage(i);
-        const textContent = await page.getTextContent();
-        
-        // Group text by Y-coordinate to form lines
-        const lines = {};
-        textContent.items.forEach(item => {
-            if (!item.str) return;
-            const y = Math.round(item.transform[5]);
-            if (!lines[y]) lines[y] = [];
-            lines[y].push({ x: item.transform[4], str: item.str });
-        });
-        
-        // Sort lines from top to bottom and join text
-        Object.keys(lines).sort((a, b) => b - a).forEach(y => {
-            const lineText = lines[y].sort((a, b) => a.x - b.x).map(i => i.str).join(' ').trim();
-            if (lineText) rawText += lineText + "\n";
-        });
-    }
-    
-    // Show the first 10 lines in the visible debug box
-    const firstLines = rawText.split('\n').slice(0, 10).join('\n');
-    updateDebug(`--- FIRST 10 LINES OF RAW PDF TEXT ---\n${firstLines}\n--------------------------------------`);
-    
-    if (rawText.trim().length === 0) {
-        updateDebug(`❌ RAW TEXT IS EMPTY! This means your PDF is a scanned image, not selectable text.`);
-        return [];
-    }
-    
-    // Parse the raw text line by line using Keva-specific logic
-    const lines = rawText.split('\n');
-    for (let line of lines) {
-        // Remove leading S.No (e.g., "1 ", "12. ")
-        line = line.replace(/^\d+\s*/, ''); 
-        
-        // Find ALL numbers in the line (handles commas and decimals)
-        const numbers = line.match(/[\d,]+\.?\d*/g);
-        
-        // We expect at least 3 numbers (MRP, SP, BP)
-        if (numbers && numbers.length >= 3) {
-            // The LAST 3 numbers are always MRP, SP, BP
-            const bp = parseFloat(numbers[numbers.length - 1].replace(/,/g, ''));
-            const sp = parseFloat(numbers[numbers.length - 2].replace(/,/g, ''));
-            const mrp = parseFloat(numbers[numbers.length - 3].replace(/,/g, ''));
-            
-            // The item name is everything before the 3rd-to-last number
-            const thirdLastNum = numbers[numbers.length - 3];
-            const nameEndIndex = line.lastIndexOf(thirdLastNum);
-            let itemName = line.substring(0, nameEndIndex).replace(/[-–—:.\s]+$/, '').trim();
-            
-            // Basic validation: Name must exist and not be just numbers
-            if (itemName && itemName.length > 1 && !itemName.match(/^\d+$/)) {
-                items.push({ item_name: itemName, mrp, sp, bp });
-            }
-        }
-    }
-    
-    updateDebug(`✅ Parser finished. Found ${items.length} valid items.`);
-    return items;
-}
+async function importData(e){const f=e.target.files[0];if(!f)return;const se=document.getElementById('backup-status');if(!confirm(`⚠️ REPLACE all data?\n\n📁 ${f.name}\n📏 ${(f.size/1024).toFixed(2)} KB\n\nThis will replace ALL current data.`)){e.target.value='';return}try{se.innerText='⏳ Reading...';se.style.color='orange';const t=await f.text();let bd;try{bd=JSON.parse(t)}catch(pe){throw new Error('Invalid JSON')}if(!bd.version||!bd.customers||!Array.isArray(bd.customers))throw new Error('Invalid format');se.innerText='⏳ Restoring...';await DB.clear('customers');await DB.clear('products');await DB.clear('manual_products');await DB.clear('bills');await DB.clear('bill_items');await DB.clear('requirements');let cn={c:0,p:0,mp:0,b:0,bi:0,r:0};if(bd.customers)for(let i of bd.customers){delete i.id;await DB.run('customers',i);cn.c++}if(bd.products)for(let i of bd.products){delete i.id;await DB.run('products',i);cn.p++}if(bd.manual_products)for(let i of bd.manual_products){delete i.id;await DB.run('manual_products',i);cn.mp++}if(bd.bills)for(let i of bd.bills){if(!i.bill_number)i.bill_number='SKAA'+String(cn.b+1).padStart(4,'0');if(!i.bp_status)i.bp_status='pending';delete i.id;await DB.run('bills',i);cn.b++}if(bd.bill_items)for(let i of bd.bill_items){delete i.id;await DB.run('bill_items',i);cn.bi++}if(bd.requirements)for(let i of bd.requirements){delete i.id;await DB.run('requirements',i);cn.r++}se.innerText='✅ Restored!';se.style.color='green';await refreshDropdownCache();loadHistoryCustomers();loadRequirementCustomers();loadManualProducts();alert(`✅ Restored!\n\n👤 ${cn.c} customers\n📦 ${cn.p} products\n⭐ ${cn.mp} manual\n🧾 ${cn.b} bills\n📋 ${cn.bi} items\n📝 ${cn.r} requirements`)}catch(err){se.innerText=`❌ ${err.message}`;se.style.color='red';alert('❌ Import failed: '+err.message)}e.target.value=''}
 
-// --- OTHER PARSERS ---
-async function parseHTML(file) {
-    const text = await file.text();
-    const parser = new DOMParser();
-    const doc = parser.parseFromString(text, 'text/html');
-    const rows = doc.querySelectorAll('table tr');
-    let items = [];
-    for (let i = 1; i < rows.length; i++) {
-        const cols = rows[i].querySelectorAll('td, th');
-        if (cols.length >= 5) {
-            const name = cols[1]?.textContent.trim();
-            const mrp = parseFloat(cols[2]?.textContent.trim().replace(/[^0-9.]/g, '')) || 0;
-            const sp = parseFloat(cols[3]?.textContent.trim().replace(/[^0-9.]/g, '')) || 0;
-            const bp = parseFloat(cols[4]?.textContent.trim().replace(/[^0-9.]/g, '')) || 0;
-            if (name && name !== 'No matching items found.') items.push({ item_name: name, mrp, sp, bp });
-        }
-    }
-    return items;
-}
+function switchSettingsPanel(p,b){document.querySelectorAll('.settings-submenu button').forEach(b=>b.classList.remove('active'));document.querySelectorAll('.settings-panel').forEach(p=>p.classList.remove('active'));b.classList.add('active');document.getElementById('panel-'+p).classList.add('active');if(p==='manual')loadManualProducts()}
 
-async function parseExcel(file) {
-    const rows = await readXlsxFile(file);
-    return rows.slice(1).filter(row => row.length >= 4 && row[0]).map(row => ({
-        item_name: String(row[0]).trim(),
-        mrp: parseFloat(String(row[1]).replace(/[^0-9.]/g, '')) || 0,
-        sp: parseFloat(String(row[2]).replace(/[^0-9.]/g, '')) || 0,
-        bp: parseFloat(String(row[3]).replace(/[^0-9.]/g, '')) || 0
-    }));
-}
+async function addManualProduct(){const name=document.getElementById('manual-prod-name').value.trim(),mrp=parseFloat(document.getElementById('manual-prod-mrp').value)||0,sp=parseFloat(document.getElementById('manual-prod-sp').value)||0,bp=parseFloat(document.getElementById('manual-prod-bp').value)||0;if(!name)return alert('⚠️ Enter product name');if(mrp<=0&&sp<=0&&bp<=0)return alert('⚠️ Enter at least one price');const ex=await DB.query('manual_products');if(ex.find(p=>p.item_name.toLowerCase()===name.toLowerCase())){if(!confirm(`⚠️ "${name}" exists.\n\nOverwrite?`))return;const d=ex.find(p=>p.item_name.toLowerCase()===name.toLowerCase());await DB.delete('manual_products',d.id)}await DB.run('manual_products',{item_name:name,mrp,sp,bp});document.getElementById('manual-prod-name').value='';document.getElementById('manual-prod-mrp').value='';document.getElementById('manual-prod-sp').value='';document.getElementById('manual-prod-bp').value='';alert(`✅ Added!\n\n⭐ ${name}`);loadManualProducts();await refreshDropdownCache()}
 
-async function parseCSV(file) {
-    const text = await file.text();
-    return text.split('\n').slice(1).filter(line => line.trim()).map(line => {
-        const cols = line.split(',').map(c => c.trim().replace(/"/g, ''));
-        if (cols.length >= 4) {
-            return {
-                item_name: cols[0],
-                mrp: parseFloat(cols[1].replace(/[^0-9.]/g, '')) || 0,
-                sp: parseFloat(cols[2].replace(/[^0-9.]/g, '')) || 0,
-                bp: parseFloat(cols[3].replace(/[^0-9.]/g, '')) || 0
-            };
-        }
-        return null;
-    }).filter(item => item !== null && item.item_name);
-}
+async function loadManualProducts(){const prods=await DB.query('manual_products'),list=document.getElementById('manual-products-list');if(!list)return;if(prods.length===0){list.innerHTML='<p style="text-align:center;color:#888;padding:20px;">No manual products yet.</p>';return}list.innerHTML=prods.sort((a,b)=>a.item_name.localeCompare(b.item_name)).map(p=>`<div class="manual-prod-item"><div class="prod-info"><div class="prod-name">⭐ ${p.item_name}</div><div class="prod-prices">💲 MRP: ${p.mrp.toFixed(2)} | 🏷️ SP: ${p.sp.toFixed(2)} | 💰 BP: ${p.bp.toFixed(2)}</div></div><button class="btn btn-danger btn-small" onclick="deleteManualProduct(${p.id},'${p.item_name.replace(/'/g,"\\'")}')"><span class="btn-icon">🗑️</span></button></div>`).join('')}
 
-window.clearProducts = async function() {
-    if (confirm('Clear ALL products?')) {
-        updateStatus('🗑️ Clearing...', 'orange');
-        await db.execute(`DELETE FROM products`);
-        updateStatus('✅ Cleared.', 'green');
-        if (window.loadDatalists) window.loadDatalists();
-    }
-};
+async function deleteManualProduct(id,name){if(!confirm(`⚠️ Delete?\n\n⭐ ${name}`))return;await DB.delete('manual_products',id);alert('✅ Deleted!');loadManualProducts();await refreshDropdownCache()}
+
+function toggleDebug(){document.getElementById('debug-box').style.display=document.getElementById('debug-box').style.display==='none'?'block':'none'}
+
+async function openShareModal(id){try{const bs=await DB.query('bills');csbill=bs.find(b=>String(b.id)===String(id));if(!csbill){alert('❌ Bill not found');return}const is=await DB.query('bill_items');csbi=is.filter(i=>String(i.bill_id)===String(id));csb=id;const billNum=getBillNum(csbill),sid=csbill.stockist_id||'';document.getElementById('share-cust-info').innerHTML=`<strong>#${billNum}</strong>${sid?` | <span class="stockist-id-badge">🏪 ${sid}</span>`:''}<br>${csbill.cust_name} | ${csbill.cust_mobile||'No Mobile'}<br><span class="customer-type-badge type-${csbill.customer_type||'customer'}" style="font-size:0.65rem;padding:2px 8px;">${(csbill.customer_type||'customer').toUpperCase()}</span>`;document.getElementById('share-modal').style.display='block'}catch(err){alert('❌ Error: '+err.message)}}
+
+function closeShareModal(){document.getElementById('share-modal').style.display='none'}
+
+function getBillText(){if(!csbill||!csbi)return'Bill data not available';const ct=csbill.customer_type||'customer',pc=csbill.price_columns?csbill.price_columns.split(','):['mrp','sp','bp'],tM=csbill.total_mrp||0,tS=csbill.total_sp||0,tB=csbill.total_bp||0,bn=getBillNum(csbill),sid=csbill.stockist_id||'';let t='🕉️ *SK AAYURVEDA*\nKEVA SUPER STOCK POINT\n-------------------------\nBill No: *'+bn+'*\n';if(sid)t+='Stockist ID: *'+sid+'*\n';t+='Date: '+new Date(csbill.date).toLocaleString()+'\n-------------------------\nCustomer: '+(csbill.cust_name||'N/A')+'\nType: '+ct.toUpperCase()+'\nMobile: '+(csbill.cust_mobile||'N/A')+'\n\n*ITEMS:*\n';if(!csbi||csbi.length===0){t+='No items found\n'}else if(ct==='stockist'){csbi.forEach(function(i,x){t+=(x+1)+'. '+(i.item_name||'Unknown')+'\n   Qty: '+(i.qty||0);if(pc.includes('mrp'))t+=' | MRP: '+(i.mrp||0);if(pc.includes('sp'))t+=' | SP: '+(i.sp||0);if(pc.includes('bp'))t+=' | BP: '+(i.bp||0);t+='\n'});t+='-------------------------\n';if(pc.includes('mrp'))t+='Total MRP: Rs. '+tM.toFixed(2)+'\n';if(pc.includes('sp'))t+='Total SP: Rs. '+tS.toFixed(2)+'\n';if(pc.includes('bp'))t+='*TOTAL BP: '+tB.toFixed(2)+'*\n'}else if(ct==='distributor'){csbi.forEach(function(i,x){t+=(x+1)+'. '+cleanProductName(i.item_name||'Unknown',ct)+'\n   Qty: '+(i.qty||0)+' | MRP: '+(i.mrp||0)+' | BP: '+(i.bp||0)+'\n   Total MRP: Rs. '+((i.mrp||0)*(i.qty||0)).toFixed(2)+' | Total BP: '+((i.bp||0)*(i.qty||0)).toFixed(2)+'\n'});t+='-------------------------\nTotal MRP: Rs. '+tM.toFixed(2)+'\n*TOTAL BP: '+tB.toFixed(2)+'*\n'}else{csbi.forEach(function(i,x){t+=(x+1)+'. '+cleanProductName(i.item_name||'Unknown',ct)+'\n   Qty: '+(i.qty||0)+' | MRP: '+(i.mrp||0)+' | Total: Rs. '+((i.mrp||0)*(i.qty||0)).toFixed(2)+'\n'});t+='-------------------------\n*TOTAL MRP: Rs. '+tM.toFixed(2)+'*\n'}t+='\nThank you! 🙏\n*Please visit again!* ✨';return t}
+
+function gcm(m){if(!m)return'';const c=String(m).replace(/\D/g,'');if(c.length===10)return'91'+c;if(c.length===12&&c.startsWith('91'))return c;if(c.length===13&&c.startsWith('91'))return c;return c}
+
+async function shareViaWhatsApp(){try{var t=getBillText(),m=gcm(csbill?csbill.cust_mobile:'');closeShareModal();var u='https://wa.me/'+m+'?text='+encodeURIComponent(t);if(window.Capacitor&&window.Capacitor.Plugins&&window.Capacitor.Plugins.Browser)await window.Capacitor.Plugins.Browser.open({url:u});else window.open(u,'_blank')}catch(e){alert('❌ Error: '+e.message)}}
+
+async function shareViaSMS(){try{var t=getBillText(),s=gcm(csbill?csbill.cust_mobile:'');if(s.startsWith('91')&&s.length===12)s=s.substring(2);closeShareModal();var u='sms:'+s+'?body='+encodeURIComponent(t);if(window.Capacitor&&window.Capacitor.Plugins&&window.Capacitor.Plugins.Browser)await window.Capacitor.Plugins.Browser.open({url:u});else window.open(u,'_blank')}catch(e){alert('❌ Error: '+e.message)}}
+
+async function shareViaPDF(){try{closeShareModal();if(!csbill||!csbi){alert('❌ Bill data not available');return}const{jsPDF}=window.jspdf,doc=new jsPDF(),ct=csbill.customer_type||'customer',pc=csbill.price_columns?csbill.price_columns.split(','):['mrp','sp','bp'],bn=getBillNum(csbill),sid=csbill.stockist_id||'';doc.setFontSize(20);doc.setFont(undefined,'bold');doc.text('SK AAYURVEDA',105,18,{align:'center'});doc.setFontSize(11);doc.setFont(undefined,'normal');doc.text('KEVA SUPER STOCK POINT',105,25,{align:'center'});doc.setDrawColor(44,62,80);doc.line(14,29,196,29);doc.setFontSize(10);doc.setFont(undefined,'bold');doc.text('Bill No: '+bn,14,37);if(sid)doc.text('Stockist ID: '+sid,14,43);doc.text('Date: '+new Date(csbill.date).toLocaleDateString(),140,sid?43:37);const iy=sid?50:46;doc.setFont(undefined,'bold');doc.text('Bill To:',14,iy);doc.setFont(undefined,'normal');doc.text(csbill.cust_name||'N/A',14,iy+6);doc.text('Type: '+ct.toUpperCase(),14,iy+12);if(csbill.cust_mobile)doc.text('Mobile: '+csbill.cust_mobile,14,iy+18);const ty=sid?78:72;let h,td,cs;if(ct==='stockist'){h=[['#','ITEM','QTY']];cs={0:{cellWidth:10},1:{cellWidth:50},2:{cellWidth:12,halign:'center'}};let ci=3;if(pc.includes('mrp')){h[0].push('MRP','T.MRP');cs[ci]={cellWidth:18,halign:'right'};cs[ci+1]={cellWidth:20,halign:'right'};ci+=2}if(pc.includes('sp')){h[0].push('SP','T.SP');cs[ci]={cellWidth:18,halign:'right'};cs[ci+1]={cellWidth:20,halign:'right'};ci+=2}if(pc.includes('bp')){h[0].push('BP','T.BP');cs[ci]={cellWidth:18,halign:'right'};cs[ci+1]={cellWidth:20,halign:'right'}}td=csbi.map((i,x)=>{const r=[x+1,i.item_name||'Unknown',i.qty||0];if(pc.includes('mrp'))r.push((i.mrp||0).toFixed(2),((i.mrp||0)*(i.qty||0)).toFixed(2));if(pc.includes('sp'))r.push((i.sp||0).toFixed(2),((i.sp||0)*(i.qty||0)).toFixed(2));if(pc.includes('bp'))r.push((i.bp||0).toFixed(2),((i.bp||0)*(i.qty||0)).toFixed(2));return r})}else if(ct==='distributor'){h=[['#','ITEM NAME','QTY','MRP','T.MRP','BP','T.BP']];cs={0:{cellWidth:8},1:{cellWidth:55},2:{cellWidth:12,halign:'center'},3:{cellWidth:18,halign:'right'},4:{cellWidth:20,halign:'right'},5:{cellWidth:18,halign:'right'},6:{cellWidth:20,halign:'right'}};td=csbi.map((i,x)=>[x+1,cleanProductName(i.item_name||'Unknown',ct),i.qty||0,(i.mrp||0).toFixed(2),((i.mrp||0)*(i.qty||0)).toFixed(2),(i.bp||0).toFixed(2),((i.bp||0)*(i.qty||0)).toFixed(2)])}else{h=[['#','ITEM NAME','QTY','MRP','TOTAL']];cs={0:{cellWidth:10},1:{cellWidth:80},2:{cellWidth:15,halign:'center'},3:{cellWidth:25,halign:'right'},4:{cellWidth:30,halign:'right'}};td=csbi.map((i,x)=>[x+1,cleanProductName(i.item_name||'Unknown',ct),i.qty||0,(i.mrp||0).toFixed(2),((i.mrp||0)*(i.qty||0)).toFixed(2)])}doc.autoTable({startY:ty,head:h,body:td,theme:'grid',headStyles:{fillColor:[44,62,80],textColor:255,fontSize:9},bodyStyles:{fontSize:8},columnStyles:cs,margin:{left:14,right:14}});const fy=doc.lastAutoTable.finalY+10;doc.setFontSize(11);let y=fy;if(ct==='stockist'){if(pc.includes('mrp')){doc.setFont(undefined,'bold');doc.text('Total MRP:',130,y);doc.setFont(undefined,'normal');doc.text('Rs. '+(csbill.total_mrp||0).toFixed(2),196,y,{align:'right'});y+=7}if(pc.includes('sp')){doc.setFont(undefined,'bold');doc.text('Total SP:',130,y);doc.setFont(undefined,'normal');doc.text('Rs. '+(csbill.total_sp||0).toFixed(2),196,y,{align:'right'});y+=7}if(pc.includes('bp')){doc.setFontSize(13);doc.setFont(undefined,'bold');doc.text('Total BP:',130,y);doc.setTextColor(39,174,96);doc.text((csbill.total_bp||0).toFixed(2),196,y,{align:'right'});doc.setTextColor(0,0,0);y+=9}}else if(ct==='distributor'){doc.setFont(undefined,'bold');doc.text('Total MRP:',130,y);doc.setFont(undefined,'normal');doc.text('Rs. '+(csbill.total_mrp||0).toFixed(2),196,y,{align:'right'});y+=7;doc.setFontSize(13);doc.setFont(undefined,'bold');doc.text('Total BP:',130,y);doc.setTextColor(39,174,96);doc.text((csbill.total_bp||0).toFixed(2),196,y,{align:'right'});doc.setTextColor(0,0,0);y+=9}else{doc.setFontSize(13);doc.setFont(undefined,'bold');doc.text('Total MRP:',130,y);doc.setTextColor(39,174,96);doc.text('Rs. '+(csbill.total_mrp||0).toFixed(2),196,y,{align:'right'});doc.setTextColor(0,0,0);y+=9}doc.setFontSize(10);doc.setFont(undefined,'italic');doc.text('Thank you for your business!',105,y+10,{align:'center'});doc.setFont(undefined,'bold');doc.setTextColor(39,174,96);doc.text('Please visit again!',105,y+18,{align:'center'});doc.setTextColor(0,0,0);const fn=bn+'_'+(csbill.cust_name||'Unknown').replace(/[^a-z0-9]/gi,'_')+'_'+new Date(csbill.date).toISOString().split('T')[0]+'.pdf';if(window.Capacitor&&window.Capacitor.Plugins&&window.Capacitor.Plugins.Filesystem){try{const FS=window.Capacitor.Plugins.Filesystem,pdf=doc.output('datauristring').split(',')[1];await FS.writeFile({path:fn,data:pdf,directory:'CACHE',recursive:true});const uri=await FS.getUri({path:fn,directory:'CACHE'});if(window.Capacitor.Plugins.Share){try{await window.Capacitor.Plugins.Share.share({title:'Bill - '+bn,text:'Bill for '+(csbill.cust_name||'Customer'),url:uri.uri,dialogTitle:'Share Bill PDF'});return}catch(e){}}if(window.Capacitor.Plugins.Browser){await window.Capacitor.Plugins.Browser.open({url:uri.uri});return}alert('✅ PDF saved: '+fn);return}catch(e){}}doc.save(fn);alert('✅ PDF downloaded: '+fn)}catch(e){alert('❌ PDF Error: '+e.message)}}
+

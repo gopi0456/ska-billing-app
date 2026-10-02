@@ -22,3 +22,8 @@ npm-debug.log*
 # Environment
 .env
 .env.local
+*.backup*
+src/*.backup*
+node_modules/
+android/build/
+android/app/build/

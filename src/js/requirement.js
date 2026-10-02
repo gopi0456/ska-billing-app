@@ -1,35 +1,16 @@
-import { db } from './db.js';
-let reqList = [];
+function selectReqCustomer(name,mobile,type){document.getElementById('req-cust').value=name;document.getElementById('req-mobile').value=mobile||'';document.getElementById('cust-list-req').classList.remove('show');resetUpdateMobile('req');reqFromDD=true;if(type)document.getElementById('req-customer-type').value=type;else findCustTypeReq(name,mobile)}
 
-document.getElementById('req-prod').addEventListener('change', async function() {
-    const res = await db.query(`SELECT * FROM products WHERE item_name = ?`, [this.value]);
-    if (res.values.length > 0) {
-        reqList.push({ item_name: this.value, qty: 1 });
-        renderReq();
-        this.value = '';
-    }
-});
+async function findCustTypeReq(n,m){const cs=await DB.query('customers'),cm=(m||'').replace(/\D/g,''),c=cs.find(x=>x.name===n&&(x.mobile||'').replace(/\D/g,'')===cm&&x.customer_type);if(c){document.getElementById('req-customer-type').value=c.customer_type;return}const bs=await DB.query('bills'),cb=bs.filter(b=>b.cust_name===n&&(b.cust_mobile||'').replace(/\D/g,'')===cm&&b.customer_type);if(cb.length>0){document.getElementById('req-customer-type').value=cb.sort((a,b)=>new Date(b.date)-new Date(a.date))[0].customer_type||'customer';return}const rs=await DB.query('requirements'),cr=rs.filter(r=>r.customer===n&&(r.mobile||'').replace(/\D/g,'')===cm&&r.customer_type);if(cr.length>0){document.getElementById('req-customer-type').value=cr.sort((a,b)=>new Date(b.date)-new Date(a.date))[0].customer_type||'customer';return}document.getElementById('req-customer-type').value='customer'}
 
-function renderReq() {
-    document.getElementById('req-body').innerHTML = reqList.map((item, idx) => `
-        <tr>
-            <td>${item.item_name}</td>
-            <td><input type="number" value="${item.qty}" min="1" onchange="reqList[${idx}].qty=parseInt(this.value)" style="width:50px"></td>
-            <td><button class="btn btn-danger" style="width:auto;padding:5px" onclick="reqList.splice(${idx},1);renderReq()">X</button></td>
-        </tr>`).join('');
-}
-window.renderReq = renderReq;
+function selectReqProduct(name){document.getElementById('req-prod').value='';document.getElementById('prod-list-req').classList.remove('show');const p=dropdownCache.products.find(x=>x.name===name);if(p){const ex=reqList.find(i=>i.item_name===p.name);if(ex)ex.qty+=1;else reqList.push({item_name:p.name,qty:1});renderReq()}}
 
-window.saveRequirement = async function() {
-    const custName = document.getElementById('req-cust').value;
-    if (!custName || reqList.length === 0) return alert('Enter customer and items');
-    const cust = await db.query(`SELECT * FROM customers WHERE name = ?`, [custName]);
-    const custId = cust.values.length > 0 ? cust.values[0].id : (await db.run(`INSERT INTO customers (name, mobile) VALUES (?, ?)`, [custName, ''])).changes.lastId;
-    
-    for (let item of reqList) {
-        await db.run(`INSERT INTO requirements (customer_id, item_name, qty, date) VALUES (?, ?, ?, ?)`, [custId, item.item_name, item.qty, new Date().toISOString()]);
-    }
-    alert('Requirement Saved!');
-    reqList = []; renderReq();
-    document.getElementById('req-cust').value = '';
-};
+async function saveRequirement(){const c=document.getElementById('req-cust').value.trim(),mo=document.getElementById('req-mobile').value.trim(),ct=document.getElementById('req-customer-type').value,uc=document.getElementById('req-update-mobile').checked;if(!c||reqList.length===0)return alert('Enter customer and items');const cs=await DB.query('customers');let co=findCustomer(cs,c,mo);if(!co){const id=await DB.run('customers',{name:c,mobile:mo,customer_type:ct});co={id,name:c,mobile:mo,customer_type:ct}}else{if(uc&&mo&&co.mobile!==mo)await DB.update('customers',co.id,{mobile});await DB.update('customers',co.id,{customer_type:ct})}for(let i of reqList)await DB.run('requirements',{customer:c,mobile:mo,customer_type:ct,item_name:i.item_name,qty:i.qty,date:new Date().toISOString()});alert(`✅ Saved!\nType: ${ct.toUpperCase()}`);reqList=[];renderReq();document.getElementById('req-cust').value='';document.getElementById('req-mobile').value='';document.getElementById('req-customer-type').value='customer';resetUpdateMobile('req');loadRequirementCustomers();await refreshDropdownCache()}
+
+async function loadRequirementCustomers(){const s=document.getElementById('search-req')?document.getElementById('search-req').value.toLowerCase():'',reqs=(await DB.query('requirements')).filter(r=>!s||(r.customer||'').toLowerCase().includes(s)||(r.mobile||'').includes(s)),g={};reqs.forEach(r=>{const k=(r.customer||'U')+'_'+((r.mobile||'').replace(/\D/g,''));if(!g[k])g[k]={name:r.customer||'Unknown',mobile:r.mobile||'',customer_type:r.customer_type||'customer',count:0,items:[]};g[k].count++;g[k].items.push(r)});document.getElementById('req-customer-list').innerHTML=Object.values(g).sort((a,b)=>a.name.localeCompare(b.name)).map(c=>{const tc=`type-${c.customer_type||'customer'}`,tl=(c.customer_type||'customer').toUpperCase();return`<div class="cust-item-req" onclick="showCustomerRequirements('${c.name.replace(/'/g,"\\'")}','${(c.mobile||'').replace(/'/g,"\\'")}','${c.customer_type||'customer'}')"><strong>${c.name}</strong><span class="phone-badge">📱 ${c.mobile||'No Mobile'}</span><span class="customer-type-badge ${tc}" style="font-size:0.65rem;padding:2px 8px;margin-left:5px;">${tl}</span><span style="float:right;color:#f39c12;font-weight:bold;">${c.count} Pending</span><div style="color:#666;font-size:0.82rem;margin-top:4px;">📦 Tap to view items</div></div>`}).join('')||'<p style="text-align:center;color:#888;padding:20px;">No pending requirements.</p>'}
+
+async function showCustomerRequirements(n,m,t){document.getElementById('req-main-view').style.display='none';document.getElementById('req-detail-view').style.display='block';const tc=`type-${t||'customer'}`,tl=(t||'customer').toUpperCase();document.getElementById('req-detail-cust-name').innerHTML=`${n} <span class="customer-type-badge ${tc}" style="font-size:0.65rem;padding:2px 8px;">${tl}</span> <span class="phone-badge">📱 ${m||'No Mobile'}</span>`;const cm=(m||'').replace(/\D/g,''),reqs=(await DB.query('requirements')).filter(r=>r.customer===n&&(r.mobile||'').replace(/\D/g,'')===cm);document.getElementById('req-detail-list').innerHTML=reqs.map(r=>`<div class="req-item"><div><strong>📦 ${r.item_name}</strong><div style="color:#666;font-size:0.82rem;">Qty: <strong>${r.qty}</strong> | 📅 ${new Date(r.date).toLocaleDateString()}</div></div><button class="btn btn-danger" style="width:auto;padding:8px 12px;margin:0;font-size:0.8rem;" onclick="deleteRequirement(${r.id},'${n.replace(/'/g,"\\'")}','${(m||'').replace(/'/g,"\\'")}','${(t||'customer').replace(/'/g,"\\'")}')"><span class="btn-icon">✅</span> Done</button></div>`).join('')||'<p>No items pending.</p>'}
+
+function goBackToReqCustomers(){document.getElementById('req-main-view').style.display='block';document.getElementById('req-detail-view').style.display='none'}
+
+async function deleteRequirement(id,n,m,t){if(confirm('Mark as fulfilled?')){await DB.delete('requirements',id);if(n)showCustomerRequirements(n,m,t);loadRequirementCustomers()}}
+
