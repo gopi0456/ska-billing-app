@@ -228,38 +228,73 @@ DB.init().then(async()=>{await refreshDropdownCache();loadDatalists();loadHistor
 </script>
 <script>
 (function() {
-    let lastCheckedName = '';
-    
-    setInterval(function() {
-        const nameBox = document.getElementById('cust-name');
-        const stockistBox = document.getElementById('stockist-id');
-        
-        if (!nameBox || !stockistBox) return;
-        
-        const currentName = nameBox.value.trim();
-        
-        // CRITICAL FIX: If the form is cleared for a new bill, reset our memory!
-        if (currentName === '') {
-            lastCheckedName = '';
-            return;
+    // The Core Rules Logic
+    function enforceRules(type) {
+        const mrp = document.getElementById('show-mrp');
+        const sp = document.getElementById('show-sp');
+        const bp = document.getElementById('show-bp');
+        const si = document.getElementById('stockist-id');
+        const name = document.getElementById('cust-name').value.trim();
+        const mobile = document.getElementById('cust-mobile').value.trim();
+
+        // If type is unknown, read from the badge
+        if (!type || type === 'undefined') {
+            const badge = document.getElementById('customer-type-badge');
+            type = badge ? badge.innerText.trim().toLowerCase() : 'customer';
         }
-        
-        // If name changed, box is empty, and box is enabled
-        if (currentName !== lastCheckedName && stockistBox.value === '' && !stockistBox.disabled) {
-            lastCheckedName = currentName; // Mark as checked
-            
-            // Wait 1 second for the app to fully update checkboxes and UI
-            setTimeout(function() {
-                // Double-check that the box is still empty and enabled
-                if (stockistBox.value === '' && !stockistBox.disabled) {
-                    if (typeof manualFetchStockistId === 'function') {
-                        console.log('🔄 Auto-filling Stockist ID for new bill...');
-                        manualFetchStockistId(true); // true = silent mode
-                    }
-                }
-            }, 1000);
+
+        // STRICT RULES
+        if (type === 'stockist') {
+            mrp.checked = true; sp.checked = true; bp.checked = true;
+            si.disabled = false;
+            // SILENT AUTO-FILL (Only for Stockists)
+            if (name && typeof autoFetchStockistId === 'function' && si.value === '') {
+                autoFetchStockistId(name, mobile).then(id => { 
+                    if(id) { si.value = id; console.log('✅ Silent Auto-Fill: Stockist ID filled.'); }
+                });
+            }
+        } else if (type === 'distributor') {
+            mrp.checked = true; sp.checked = false; bp.checked = true;
+            si.disabled = true; si.value = '';
+        } else {
+            // CUSTOMER or NEW/UNKNOWN
+            mrp.checked = true; sp.checked = false; bp.checked = false;
+            si.disabled = true; si.value = '';
         }
-    }, 500);
+
+        if (typeof updatePriceDisplay === 'function') updatePriceDisplay();
+    }
+
+    window.addEventListener('load', () => {
+        setTimeout(() => {
+            // 1. Wrap selectCustomer (For Dropdown Clicks)
+            if (typeof window.selectCustomer === 'function') {
+                const origSelect = window.selectCustomer;
+                window.selectCustomer = function(name, mobile, type) {
+                    // Let the app do its job first (Name/Mobile fill, search)
+                    origSelect(name, mobile, type);
+                    // Apply our rules 150ms later
+                    setTimeout(() => enforceRules(type), 150);
+                };
+                console.log('✅ Wrapped selectCustomer safely.');
+            }
+
+            // 2. Listen for Typing (Debounced)
+            const nameInput = document.getElementById('cust-name');
+            if (nameInput) {
+                let timer;
+                nameInput.addEventListener('input', () => {
+                    clearTimeout(timer);
+                    timer = setTimeout(() => {
+                        // Wait for app to update badge, then enforce rules
+                        const badge = document.getElementById('customer-type-badge');
+                        if (badge) enforceRules(badge.innerText.trim().toLowerCase());
+                    }, 800);
+                });
+                console.log('✅ Added safe typing listener.');
+            }
+        }, 1000);
+    });
 })();
 </script></body>
 </html>
