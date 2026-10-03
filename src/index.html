@@ -296,5 +296,40 @@ DB.init().then(async()=>{await refreshDropdownCache();loadDatalists();loadHistor
         }, 1000);
     });
 })();
-</script></body>
+</script>
+<script>
+// Toggle Stockist ID field visibility
+function toggleStockistField(type) {
+    const group = document.getElementById('new-stockist-id-group');
+    if (group) {
+        group.style.display = (type === 'stockist') ? 'block' : 'none';
+        if (type !== 'stockist') {
+            const input = document.getElementById('new-cust-stockist-id');
+            if (input) input.value = '';
+        }
+    }
+}
+
+// Wait for app to load, then wrap the DB save function to capture Stockist ID
+window.addEventListener('load', () => {
+    setTimeout(() => {
+        if (typeof DB !== 'undefined' && DB.run) {
+            const origRun = DB.run;
+            DB.run = function(table, data) {
+                // If saving a customer, attach the Stockist ID from our new field
+                if (table === 'customers' && data) {
+                    const sidInput = document.getElementById('new-cust-stockist-id');
+                    if (sidInput && sidInput.value.trim() !== '') {
+                        data.stockist_id = sidInput.value.trim();
+                        console.log('✅ Attached Stockist ID to new customer:', data.stockist_id);
+                    }
+                }
+                return origRun.call(this, table, data);
+            };
+            console.log('✅ Wrapped DB.run to save Stockist ID.');
+        }
+    }, 1000);
+});
+</script>
+</body>
 </html>
