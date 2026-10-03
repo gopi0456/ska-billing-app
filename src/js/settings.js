@@ -8,7 +8,31 @@ async function clearProducts(){if(confirm('⚠️ Clear all PDF/Excel products?\
 
 async function exportData(){try{const se=document.getElementById('backup-status');se.innerText='⏳ Creating backup...';se.style.color='orange';let bd={};if(DB.isCapacitor&&DB.conn)bd={version:'2.0',exportDate:new Date().toISOString(),customers:await DB.query('customers'),products:await DB.query('products'),manual_products:await DB.query('manual_products'),bills:await DB.query('bills'),bill_items:await DB.query('bill_items'),requirements:await DB.query('requirements')};else bd={version:'2.0',exportDate:new Date().toISOString(),...DB.data};const js=JSON.stringify(bd,null,2),fn=`SKA_Backup_${new Date().toISOString().split('T')[0]}.json`;if(window.Capacitor&&window.Capacitor.Plugins&&window.Capacitor.Plugins.Filesystem){try{const FS=window.Capacitor.Plugins.Filesystem,Dir=FS.Directory||{Documents:'DOCUMENTS'},Enc=FS.Encoding||{UTF8:'utf8'};await FS.writeFile({path:fn,data:js,directory:Dir.Documents||'DOCUMENTS',encoding:Enc.UTF8||'utf8',recursive:true});const uri=await FS.getUri({path:fn,directory:Dir.Documents||'DOCUMENTS'});if(window.Capacitor.Plugins.Share)await window.Capacitor.Plugins.Share.share({title:'SK Aayurveda Backup',text:`Backup: ${bd.customers.length} customers`,url:uri.uri,dialogTitle:'Save Backup'});se.innerText='✅ Backup saved!';se.style.color='green';alert(`✅ Saved!\n\n📁 ${fn}\n📍 Documents folder`);return}catch(e){console.log(e)}}if(window.Capacitor&&window.Capacitor.Plugins&&window.Capacitor.Plugins.Share){try{await window.Capacitor.Plugins.Share.share({title:'SK Aayurveda Backup',text:js,dialogTitle:'Share Backup'});se.innerText='✅ Backup shared!';se.style.color='green';return}catch(e){}}const bl=new Blob([js],{type:'application/json;charset=utf-8'}),fl=new File([bl],fn,{type:'application/json;charset=utf-8'});if(navigator.canShare&&navigator.canShare({files:[fl]})){await navigator.share({files:[fl],title:'Backup'});se.innerText='✅ Shared!';se.style.color='green'}else{const u=URL.createObjectURL(bl),a=document.createElement('a');a.href=u;a.download=fn;document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(u);se.innerText=`✅ Downloaded: ${fn}`;se.style.color='green'}}catch(e){document.getElementById('backup-status').innerText=`❌ ${e.message}`;document.getElementById('backup-status').style.color='red';alert('❌ Export failed: '+e.message)}}
 
-async function importData(e){const f=e.target.files[0];if(!f)return;const se=document.getElementById('backup-status');if(!confirm(`⚠️ REPLACE all data?\n\n📁 ${f.name}\n📏 ${(f.size/1024).toFixed(2)} KB\n\nThis will replace ALL current data.`)){e.target.value='';return}try{se.innerText='⏳ Reading...';se.style.color='orange';const t=await f.text();let bd;try{bd=JSON.parse(t)}catch(pe){throw new Error('Invalid JSON')}if(!bd.version||!bd.customers||!Array.isArray(bd.customers))throw new Error('Invalid format');se.innerText='⏳ Restoring...';await DB.clear('customers');await DB.clear('products');await DB.clear('manual_products');await DB.clear('bills');await DB.clear('bill_items');await DB.clear('requirements');let cn={c:0,p:0,mp:0,b:0,bi:0,r:0};if(bd.customers)for(let i of bd.customers){delete i.id;await DB.run('customers',i);cn.c++}if(bd.products)for(let i of bd.products){delete i.id;await DB.run('products',i);cn.p++}if(bd.manual_products)for(let i of bd.manual_products){delete i.id;await DB.run('manual_products',i);cn.mp++}if(bd.bills)for(let i of bd.bills){if(!i.bill_number)i.bill_number='SKAA'+String(cn.b+1).padStart(4,'0');if(!i.bp_status)i.bp_status='pending';delete i.id;await DB.run('bills',i);cn.b++}if(bd.bill_items)for(let i of bd.bill_items){delete i.id;await DB.run('bill_items',i);cn.bi++}if(bd.requirements)for(let i of bd.requirements){delete i.id;await DB.run('requirements',i);cn.r++}se.innerText='✅ Restored!';se.style.color='green';await refreshDropdownCache();loadHistoryCustomers();loadRequirementCustomers();loadManualProducts();alert(`✅ Restored!\n\n👤 ${cn.c} customers\n📦 ${cn.p} products\n⭐ ${cn.mp} manual\n🧾 ${cn.b} bills\n📋 ${cn.bi} items\n📝 ${cn.r} requirements`)}catch(err){se.innerText=`❌ ${err.message}`;se.style.color='red';alert('❌ Import failed: '+err.message)}e.target.value=''}
+async function importData(e){
+const f=e.target.files[0]; if(!f)return;
+const se=document.getElementById('backup-status');
+if(!confirm(`⚠️ MERGE DATA?\n\n📁 ${f.name}\n\n• New items will be ADDED.\n• Existing items will stay AS THEY ARE.\n• Old items not in file will be KEPT.`)){e.target.value='';return}
+try{
+se.innerText='⏳ Reading...'; se.style.color='orange';
+const t=await f.text(); let bd; try{bd=JSON.parse(t)}catch(pe){throw new Error('Invalid JSON')}
+if(!bd.customers) throw new Error('Invalid format');
+se.innerText=' Merging...';
+let added=0, skipped=0;
+const tables=['customers','products','manual_products','bills','bill_items','requirements'];
+for(let tbl of tables){
+if(bd[tbl]){
+for(let item of bd[tbl]){
+const oldId = item.id;
+const res = await DB.run(tbl, item);
+if(res === oldId) skipped++; else added++;
+}}}
+se.innerText='✅ Merged!'; se.style.color='green';
+alert(`✅ Merge Complete!\n\n➕ Added: ${added}\n🛡️ Skipped (Existing): ${skipped}`);
+await refreshDropdownCache(); loadHistoryCustomers(); loadRequirementCustomers(); loadManualProducts();
+}catch(err){ se.innerText=`❌ ${err.message}`; se.style.color='red'; alert(' '+err.message) }
+e.target.value='';
+}
+
 
 function switchSettingsPanel(p,b){document.querySelectorAll('.settings-submenu button').forEach(b=>b.classList.remove('active'));document.querySelectorAll('.settings-panel').forEach(p=>p.classList.remove('active'));b.classList.add('active');document.getElementById('panel-'+p).classList.add('active');if(p==='manual')loadManualProducts()}
 
