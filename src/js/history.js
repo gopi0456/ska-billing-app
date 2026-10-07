@@ -87,3 +87,244 @@ function closeAddCustomerModal(){document.getElementById('add-cust-modal').style
 
 async function saveNewCustomer(){const name=document.getElementById('new-cust-name').value.trim();const mobile=document.getElementById('new-cust-mobile').value.trim();const type=document.getElementById('new-cust-type').value;const sid=document.getElementById('new-cust-stockist-id').value.trim();if(!name){alert('⚠️ Customer name required');return}if(type==='stockist'&&!sid){if(!confirm('⚠️ Stockist ID is empty.\n\nContinue without Stockist ID?'))return}try{const cs=await DB.query('customers');const existing=cs.find(c=>c.name.toLowerCase()===name.toLowerCase()&&(c.mobile||'').replace(/\D/g,'')===mobile.replace(/\D/g,''));if(existing){alert('⚠️ Customer already exists!\n\nUse Edit button to modify.');return}await DB.run('customers',{name,mobile,customer_type:type});if(type==='stockist'&&sid){const newCust=(await DB.query('customers')).find(c=>c.name===name&&(c.mobile||'')===mobile);if(newCust){const bn='SKAA'+String(Date.now()).slice(-4);await DB.run('bills',{bill_number:bn,customer_id:newCust.id,cust_name:name,cust_mobile:mobile,customer_type:type,date:new Date().toISOString(),total_mrp:0,total_sp:0,total_bp:0,price_columns:'mrp,sp,bp',bp_status:'done',stockist_id:sid,bp_done_date:new Date().toISOString(),bp_done_remarks:'Customer created with Stockist ID'})}}alert('✅ Customer added!\n\n👤 '+name+'\n🏷️ '+type.toUpperCase()+(sid?'\n🏪 '+sid:''));closeAddCustomerModal();renderCustomerManagement();await refreshDropdownCache()}catch(err){alert('❌ Error: '+err.message)}}
 
+
+
+// ==========================================================
+// BL-FULL-V1 : Bill List + Edit Modal + History Toggle/Pagination
+// (self-contained; uses only original app globals)
+// ==========================================================
+var BL = { page:1, per:10, items:[], billId:null, prods:[], bill:null };
+var HP = { page:1, per:10 };
+
+function blToggle(){
+    var s=document.getElementById('blx-sec'), b=document.getElementById('blx-btn');
+    if(!s||!b) return;
+    var hidden = (s.style.display==='none'||s.style.display==='');
+    s.style.display = hidden?'block':'none';
+    b.innerHTML = hidden?'&#128281; Hide Bill List':'&#128203; Show Bill List';
+    if(hidden) blRender();
+}
+function blChangePer(v){ BL.per=parseInt(v)||10; BL.page=1; blRender(); }
+function blPrev(){ if(BL.page>1){BL.page--; blRender();} }
+function blNext(){ BL.page++; blRender(); }
+
+async function blRender(){
+    var c=document.getElementById('blx-cards'); if(!c) return;
+    try{
+        var bills = await DB.query('bills');
+        bills.sort(function(a,b){return b.id-a.id;});
+        var pages = Math.max(1, Math.ceil(bills.length/BL.per));
+        if(BL.page>pages) BL.page=pages;
+        var slice = bills.slice((BL.page-1)*BL.per, BL.page*BL.per);
+        c.innerHTML = slice.map(function(b){
+            var t=b.customer_type||'customer';
+            var bp=(b.total_bp||0).toFixed(2);
+            return '<div class="bill-item" onclick="openBLModal('+b.id+')" style="cursor:pointer;margin-bottom:12px;">'+
+              '<div style="margin-bottom:6px;">'+
+                '<span class="bill-number-badge">#'+getBillNum(b)+'</span> '+
+                '<span class="customer-type-badge type-'+t+'" style="font-size:0.65rem;padding:2px 8px;">'+t.toUpperCase()+'</span> '+
+                ((String(b.bp_status||'pending').toLowerCase()==='done')?'<span class="bp-status-badge bp-done">BP DONE</span>':'<span class="bp-status-badge bp-pending">BP PENDING</span>')+
+              '</div>'+
+              '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;">'+
+                '<div><strong>'+new Date(b.date).toLocaleDateString()+'</strong>'+
+                '<div style="color:#666;font-size:0.82rem;margin-top:4px;">MRP: Rs. '+(b.total_mrp||0).toFixed(2)+' | BP: '+bp+'</div>'+
+                '<div style="color:#333;font-size:0.9rem;margin-top:4px;">'+(b.cust_name||'Unknown')+'</div></div>'+
+                '<div style="font-weight:bold;color:#27ae60;font-size:1.1rem;">'+bp+' BP</div>'+
+              '</div></div>';
+        }).join('') || '<p style="text-align:center;color:#888;padding:15px;">No bills found.</p>';
+        document.getElementById('blx-info').innerText='Page '+BL.page+' of '+pages;
+        document.getElementById('blx-prev').disabled = (BL.page===1);
+        document.getElementById('blx-next').disabled = (BL.page===pages);
+    }catch(e){ console.error('blRender',e); }
+}
+
+async function blGetProducts(){
+    if(BL.prods && BL.prods.length) return BL.prods;
+    try{ if(typeof dropdownCache!=='undefined' && dropdownCache.products && dropdownCache.products.length){ BL.prods=dropdownCache.products; return BL.prods; } }catch(e){}
+    try{ if(typeof refreshDropdownCache==='function'){ await refreshDropdownCache(); if(dropdownCache && dropdownCache.products && dropdownCache.products.length){ BL.prods=dropdownCache.products; return BL.prods; } } }catch(e){}
+    try{ BL.prods = (await DB.query('products'))||[]; }catch(e){ BL.prods=[]; }
+    return BL.prods;
+}
+
+async function openBLModal(id){
+    BL.billId=id;
+    var bills=await DB.query('bills');
+    BL.bill=bills.find(function(b){return b.id===id;});
+    var items=await DB.query('bill_items');
+    BL.items=items.filter(function(i){return i.bill_id===id;}).map(function(i){return {id:i.id,item_name:i.item_name,qty:i.qty,mrp:i.mrp,sp:i.sp,bp:i.bp};});
+    blGetProducts();
+    blRenderModal();
+    document.getElementById('blx-modal').style.display='block';
+}
+function blClose(){ document.getElementById('blx-modal').style.display='none'; }
+
+function blRenderModal(){
+    var b=BL.bill; if(!b) return;
+    var rows = BL.items.map(function(it,idx){
+        return '<div class="blx-item"><div style="display:flex;justify-content:space-between;margin-bottom:8px;">'+
+          '<strong>'+it.item_name+'</strong>'+
+          '<button onclick="blRemoveItem('+idx+')" style="background:#ffebee;color:#dc3545;border:none;border-radius:6px;padding:4px 10px;cursor:pointer;">X</button></div>'+
+          '<div class="blx-grid">'+
+          '<div><label>Qty</label><input class="blx-in" type="number" value="'+(it.qty||0)+'" onchange="blSetField('+idx+',\'qty\',this.value)"></div>'+
+          '<div><label>MRP</label><input class="blx-in" type="number" value="'+(it.mrp||0)+'" onchange="blSetField('+idx+',\'mrp\',this.value)"></div>'+
+          '<div><label>SP</label><input class="blx-in" type="number" value="'+(it.sp||0)+'" onchange="blSetField('+idx+',\'sp\',this.value)"></div>'+
+          '<div><label>BP</label><input class="blx-in" type="number" value="'+(it.bp||0)+'" onchange="blSetField('+idx+',\'bp\',this.value)"></div>'+
+          '</div></div>';
+    }).join('');
+    document.getElementById('blx-modal-body').innerHTML =
+      '<div style="display:flex;justify-content:space-between;border-bottom:2px solid #007bff;padding-bottom:10px;margin-bottom:15px;">'+
+      '<h3 style="margin:0;">Edit Bill: #'+getBillNum(b)+'</h3>'+
+      '<button onclick="blClose()" style="background:none;border:none;font-size:1.8rem;cursor:pointer;">&times;</button></div>'+
+      '<div style="background:#f8f9fa;padding:12px;border-radius:8px;margin-bottom:15px;border-left:4px solid #007bff;">'+
+      '<p style="margin:0 0 5px 0;"><strong>'+(b.cust_name||'')+'</strong> <span class="customer-type-badge type-'+(b.customer_type||'customer')+'" style="font-size:0.65rem;padding:2px 8px;">'+(b.customer_type||'customer').toUpperCase()+'</span></p>'+
+      '<p style="margin:0;color:#666;font-size:0.85rem;">'+new Date(b.date).toLocaleDateString()+'</p></div>'+
+      '<div style="background:#f8f9fa;padding:12px;border-radius:8px;margin-bottom:15px;border:1px solid #e9ecef;">'+
+      '<h4 style="margin:0 0 10px 0;">Add New Product</h4>'+
+      '<input id="bl-search" placeholder="Search product to add..." autocomplete="off" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;box-sizing:border-box;">'+
+      '<div id="bl-dd" class="blx-dd"></div></div>'+
+      '<h4 style="margin-bottom:10px;">Bill Items ('+BL.items.length+')</h4>'+
+      (rows || '<p style="text-align:center;color:#888;padding:15px;">No items yet. Search above to add.</p>')+
+      '<div class="blx-tot"><div><div style="font-size:.7rem;color:#666;">TOTAL MRP</div><div style="font-size:1.1rem;font-weight:800;">Rs. <span id="bl-t-mrp">0.00</span></div></div>'+
+      '<div><div style="font-size:.7rem;color:#666;">TOTAL SP</div><div style="font-size:1.1rem;font-weight:800;">Rs. <span id="bl-t-sp">0.00</span></div></div>'+
+      '<div><div style="font-size:.7rem;color:#28a745;">TOTAL BP</div><div style="font-size:1.1rem;font-weight:800;color:#28a745;">Rs. <span id="bl-t-bp">0.00</span></div></div></div>'+
+      '<div style="display:flex;gap:10px;margin-top:15px;">'+
+      '<button onclick="blClose()" style="flex:1;padding:12px;background:#e9ecef;border:none;border-radius:8px;font-weight:700;cursor:pointer;">Cancel</button>'+
+      '<button onclick="blSave()" style="flex:1;padding:12px;background:#28a745;color:#fff;border:none;border-radius:8px;font-weight:700;cursor:pointer;">Save Changes</button></div>';
+    blTotals();
+    var dd=document.getElementById('bl-dd'); if(dd) dd.style.display='none';
+}
+
+function blSetField(idx,field,val){ if(BL.items[idx]){ BL.items[idx][field]=parseFloat(val)||0; blTotals(); } }
+function blRemoveItem(idx){ BL.items.splice(idx,1); blRenderModal(); }
+function blTotals(){
+    var m=0,s=0,bp=0;
+    BL.items.forEach(function(i){ m+=(i.mrp||0)*(i.qty||0); s+=(i.sp||0)*(i.qty||0); bp+=(i.bp||0)*(i.qty||0); });
+    var e1=document.getElementById('bl-t-mrp'); if(e1)e1.innerText=m.toFixed(2);
+    var e2=document.getElementById('bl-t-sp'); if(e2)e2.innerText=s.toFixed(2);
+    var e3=document.getElementById('bl-t-bp'); if(e3)e3.innerText=bp.toFixed(2);
+}
+
+async function blSearch(val){
+    var dd=document.getElementById('bl-dd'); if(!dd) return;
+    if(!val){ dd.style.display='none'; return; }
+    var prods = await blGetProducts();
+    var f=val.toLowerCase();
+    var matched=prods.filter(function(p){
+        return (p.name||'').toLowerCase().indexOf(f)!==-1 || (p.detail||'').toLowerCase().indexOf(f)!==-1;
+    });
+    console.log('[blSearch] loaded:',prods.length,'matched:',matched.length);
+    if(!matched.length){
+        dd.innerHTML='<div style="padding:10px 15px;color:#999;">No matches ('+prods.length+' products loaded)</div>';
+    }else{
+        dd.innerHTML=matched.slice(0,30).map(function(p){
+            return '<div class="blx-dd-row" data-bl-prod="'+String(p.name||'').replace(/"/g,'&quot;')+'">'+
+              '<div style="font-weight:600;color:#333;">'+(p.name||'')+'</div>'+
+              '<div style="font-size:0.8rem;color:#666;margin-top:2px;">'+(p.detail||'')+'</div></div>';
+        }).join('');
+    }
+    dd.style.display='block';
+}
+
+function blAddProd(name){
+    var p=null;
+    for(var i=0;i<BL.prods.length;i++){ if(BL.prods[i].name===name){ p=BL.prods[i]; break; } }
+    if(!p) return;
+    var d=p.detail||'';
+    var m1=d.match(/MRP: ([0-9.]+)/); var m2=d.match(/SP: ([0-9.]+)/); var m3=d.match(/BP: ([0-9.]+)/);
+    var mrp=m1?parseFloat(m1[1]):0, sp=m2?parseFloat(m2[1]):0, bp=m3?parseFloat(m3[1]):0;
+    var ex=null;
+    for(var j=0;j<BL.items.length;j++){ if(BL.items[j].item_name===name){ ex=BL.items[j]; break; } }
+    if(ex){ ex.qty=(ex.qty||0)+1; } else { BL.items.push({item_name:name,qty:1,mrp:mrp,sp:sp,bp:bp}); }
+    var inp=document.getElementById('bl-search'); if(inp) inp.value='';
+    var dd=document.getElementById('bl-dd'); if(dd) dd.style.display='none';
+    blRenderModal();
+}
+
+async function blSave(){
+    if(!BL.billId) return;
+    try{
+        var old=await DB.query('bill_items');
+        for(var i=0;i<old.length;i++){ if(old[i].bill_id===BL.billId) await DB.delete('bill_items', old[i].id); }
+        var tM=0,tS=0,tB=0;
+        for(var k=0;k<BL.items.length;k++){
+            var it=BL.items[k], q=it.qty||0, m=it.mrp||0, s=it.sp||0, b=it.bp||0;
+            await DB.run('bill_items',{bill_id:BL.billId,item_name:it.item_name,mrp:m,sp:s,bp:b,qty:q,tot_mrp:m*q,tot_sp:s*q,tot_bp:b*q});
+            tM+=m*q; tS+=s*q; tB+=b*q;
+        }
+        await DB.update('bills', BL.billId, {total_mrp:tM, total_sp:tS, total_bp:tB});
+        alert('Bill updated successfully!');
+        blClose(); blRender();
+        if(typeof loadHistoryCustomers==='function') loadHistoryCustomers();
+    }catch(e){ alert('Error: '+e.message); }
+}
+
+// ---- delegated events (no inline onclick with quotes) ----
+document.addEventListener('input', function(e){
+    if(e.target && e.target.id==='bl-search'){ e.stopImmediatePropagation(); blSearch(e.target.value); }
+}, true);
+document.addEventListener('click', function(e){
+    var row=e.target.closest ? e.target.closest('[data-bl-prod]') : null;
+    if(row){ blAddProd(row.getAttribute('data-bl-prod')); return; }
+    var dd=document.getElementById('bl-dd'), inp=document.getElementById('bl-search');
+    if(dd && inp && e.target!==inp && !dd.contains(e.target)){ setTimeout(function(){ dd.style.display='none'; },150); }
+}, true);
+
+// ---- original history toggle + pagination ----
+function histToggle(){
+    var m=document.getElementById('history-main-view'), b=document.getElementById('histx-btn');
+    if(!m||!b) return;
+    var hidden=(m.style.display==='none');
+    m.style.display = hidden?'block':'none';
+    b.innerHTML = hidden?'&#128281; Hide Billing History':'&#128203; Show Billing History';
+}
+function histPag(){
+    var list=document.getElementById('customer-list'); if(!list) return;
+    var items=list.querySelectorAll('.cust-item'); if(!items.length) return;
+    var pages=Math.max(1, Math.ceil(items.length/HP.per));
+    if(HP.page>pages) HP.page=pages;
+    var start=(HP.page-1)*HP.per;
+    for(var i=0;i<items.length;i++){ items[i].style.display=(i>=start&&i<start+HP.per)?'':'none'; }
+    var pag=document.getElementById('histx-pag');
+    if(!pag){ pag=document.createElement('div'); pag.id='histx-pag'; pag.className='blx-pag'; list.parentNode.insertBefore(pag, list.nextSibling); }
+    pag.innerHTML='<select onchange="HP.per=parseInt(this.value)||10;HP.page=1;histPag();" style="padding:6px 10px;border-radius:6px;border:1px solid #ddd;">'+
+      '<option value="10"'+(HP.per===10?' selected':'')+'>10</option><option value="20"'+(HP.per===20?' selected':'')+'>20</option><option value="50"'+(HP.per===50?' selected':'')+'>50</option></select>'+
+      '<button onclick="HP.page--;histPag();"'+(HP.page===1?' disabled':'')+'>Previous</button>'+
+      '<span style="font-weight:700;">Page '+HP.page+' of '+pages+'</span>'+
+      '<button onclick="HP.page++;histPag();"'+(HP.page===pages?' disabled':'')+'>Next</button>';
+}
+
+// ---- build UI once ----
+window.addEventListener('load', function(){
+    setTimeout(function(){
+        var hmv=document.getElementById('history-main-view');
+        if(!hmv || document.getElementById('blx-btn')) return;
+
+        // history toggle button at top of history card
+        var hb=document.createElement('button');
+        hb.id='histx-btn'; hb.className='blx-toggle'; hb.innerHTML='&#128281; Hide Billing History';
+        hb.onclick=histToggle;
+        hmv.parentNode.insertBefore(hb, hmv);
+        var cl=document.getElementById('customer-list');
+        if(cl && window.MutationObserver){ new MutationObserver(function(){histPag();}).observe(cl,{childList:true,subtree:true}); }
+        setTimeout(histPag,600);
+
+        // bill list card: inside the container that holds both history views
+        var T=hmv;
+        while(T.parentElement && !T.contains(document.getElementById('history-detail-view'))){ T=T.parentElement; }
+        var card=document.createElement('div');
+        card.className='blx-card';
+        card.innerHTML='<button id="blx-btn" class="blx-show" onclick="blToggle()">&#128203; Show Bill List</button>'+
+          '<div id="blx-sec" style="display:none;margin-top:15px;">'+
+          '<div id="blx-cards"></div>'+
+          '<div class="blx-pag"><button id="blx-prev" onclick="blPrev()">Previous</button>'+
+          '<span id="blx-info" style="font-weight:700;">Page 1</span>'+
+          '<button id="blx-next" onclick="blNext()">Next</button></div></div>';
+        T.parentNode.insertBefore(card, T.nextSibling);
+
+        // modal
+        var md=document.createElement('div');
+        md.id='blx-modal'; md.className='blx-modal';
+        md.innerHTML='<div class="blx-modal-box"><div id="blx-modal-body"></div></div>';
+        document.body.appendChild(md);
+    }, 1200);
+});
