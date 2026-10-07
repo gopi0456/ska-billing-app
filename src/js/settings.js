@@ -48,7 +48,7 @@ async function openShareModal(id){try{const bs=await DB.query('bills');csbill=bs
 
 function closeShareModal(){document.getElementById('share-modal').style.display='none'}
 
-function getBillText(){if(!csbill||!csbi)return'Bill data not available';const ct=csbill.customer_type||'customer',pc=csbill.price_columns?csbill.price_columns.split(','):['mrp','sp','bp'],tM=csbill.total_mrp||0,tS=csbill.total_sp||0,tB=csbill.total_bp||0,bn=getBillNum(csbill),sid=csbill.stockist_id||'';let t='🕉️ *SK AAYURVEDA*\nKEVA SUPER STOCK POINT\n-------------------------\nBill No: *'+bn+'*\n';if(sid)t+='Stockist ID: *'+sid+'*\n';t+='Date: '+new Date(csbill.date).toLocaleString()+'\n-------------------------\nCustomer: '+(csbill.cust_name||'N/A')+'\nType: '+ct.toUpperCase()+'\nMobile: '+(csbill.cust_mobile||'N/A')+'\n\n*ITEMS:*\n';if(!csbi||csbi.length===0){t+='No items found\n'}else if(ct==='stockist'){csbi.forEach(function(i,x){t+=(x+1)+'. '+(i.item_name||'Unknown')+'\n   Qty: '+(i.qty||0);if(pc.includes('mrp'))t+=' | MRP: '+(i.mrp||0);if(pc.includes('sp'))t+=' | SP: '+(i.sp||0);if(pc.includes('bp'))t+=' | BP: '+(i.bp||0);t+='\n'});t+='-------------------------\n';if(pc.includes('mrp'))t+='Total MRP: Rs. '+tM.toFixed(2)+'\n';if(pc.includes('sp'))t+='Total SP: Rs. '+tS.toFixed(2)+'\n';if(pc.includes('bp'))t+='*TOTAL BP: '+tB.toFixed(2)+'*\n'}else if(ct==='distributor'){csbi.forEach(function(i,x){t+=(x+1)+'. '+cleanProductName(i.item_name||'Unknown',ct)+'\n   Qty: '+(i.qty||0)+' | MRP: '+(i.mrp||0)+' | BP: '+(i.bp||0)+'\n   Total MRP: Rs. '+((i.mrp||0)*(i.qty||0)).toFixed(2)+' | Total BP: '+((i.bp||0)*(i.qty||0)).toFixed(2)+'\n'});t+='-------------------------\nTotal MRP: Rs. '+tM.toFixed(2)+'\n*TOTAL BP: '+tB.toFixed(2)+'*\n'}else{csbi.forEach(function(i,x){t+=(x+1)+'. '+cleanProductName(i.item_name||'Unknown',ct)+'\n   Qty: '+(i.qty||0)+' | MRP: '+(i.mrp||0)+' | Total: Rs. '+((i.mrp||0)*(i.qty||0)).toFixed(2)+'\n'});t+='-------------------------\n*TOTAL MRP: Rs. '+tM.toFixed(2)+'*\n'}t+='\nThank you! 🙏\n*Please visit again!* ✨';return t}
+function getBillText(){if(!csbill||!csbi)return'Bill data not available';const ct=csbill.customer_type||'customer',pc=csbill.price_columns?csbill.price_columns.split(','):['mrp','sp','bp'],tM=csbill.total_mrp||0,tS=csbill.total_sp||0,tB=csbill.total_bp||0,bn=getBillNum(csbill),sid=csbill.stockist_id||'';let t='🕉️ *SK AAYURVEDA*\nKEVA SUPER STOCK POINT\n-------------------------\nBill No: *'+bn+'*\n';if(sid)t+='Stockist ID: *'+sid+'*\n';t+='Date: '+new Date(csbill.date).toLocaleString()+'\n-------------------------\nCustomer: '+(csbill.cust_name||'N/A')+'\nType: '+ct.toUpperCase()+'\nMobile: '+(csbill.cust_mobile||'N/A')+'\n\n*ITEMS:*\n';if(!csbi||csbi.length===0){t+='No items found\n'}else if(ct==='stockist'){csbi.forEach(function(i,x){t+=(x+1)+'. '+(i.item_name||'Unknown')+'\n   Qty: '+(i.qty||0);if(pc.includes('mrp'))t+=' | MRP: '+(i.mrp||0);if(pc.includes('sp'))t+=' | DP: '+(i.sp||0);if(pc.includes('bp'))t+=' | BP: '+(i.bp||0);t+='\n'});t+='-------------------------\n';if(pc.includes('mrp'))t+='Total MRP: Rs. '+tM.toFixed(2)+'\n';if(pc.includes('sp'))t+='Total DP: Rs. '+tS.toFixed(2)+'\n';if(pc.includes('bp'))t+='*TOTAL BP: '+tB.toFixed(2)+'*\n'}else if(ct==='distributor'){csbi.forEach(function(i,x){t+=(x+1)+'. '+cleanProductName(i.item_name||'Unknown',ct)+'\n   Qty: '+(i.qty||0)+' | MRP: '+(i.mrp||0)+' | BP: '+(i.bp||0)+'\n   Total MRP: Rs. '+((i.mrp||0)*(i.qty||0)).toFixed(2)+' | Total BP: '+((i.bp||0)*(i.qty||0)).toFixed(2)+'\n'});t+='-------------------------\nTotal MRP: Rs. '+tM.toFixed(2)+'\n*TOTAL BP: '+tB.toFixed(2)+'*\n'}else{csbi.forEach(function(i,x){t+=(x+1)+'. '+cleanProductName(i.item_name||'Unknown',ct)+'\n   Qty: '+(i.qty||0)+' | MRP: '+(i.mrp||0)+' | Total: Rs. '+((i.mrp||0)*(i.qty||0)).toFixed(2)+'\n'});t+='-------------------------\n*TOTAL MRP: Rs. '+tM.toFixed(2)+'*\n'}t+='\nThank you! 🙏\n*Please visit again!* ✨';return t}
 
 function gcm(m){if(!m)return'';const c=String(m).replace(/\D/g,'');if(c.length===10)return'91'+c;if(c.length===12&&c.startsWith('91'))return c;if(c.length===13&&c.startsWith('91'))return c;return c}
 
@@ -56,5 +56,102 @@ async function shareViaWhatsApp(){try{var t=getBillText(),m=gcm(csbill?csbill.cu
 
 async function shareViaSMS(){try{var t=getBillText(),s=gcm(csbill?csbill.cust_mobile:'');if(s.startsWith('91')&&s.length===12)s=s.substring(2);closeShareModal();var u='sms:'+s+'?body='+encodeURIComponent(t);if(window.Capacitor&&window.Capacitor.Plugins&&window.Capacitor.Plugins.Browser)await window.Capacitor.Plugins.Browser.open({url:u});else window.open(u,'_blank')}catch(e){alert('❌ Error: '+e.message)}}
 
-async function shareViaPDF(){try{closeShareModal();if(!csbill||!csbi){alert('❌ Bill data not available');return}const{jsPDF}=window.jspdf,doc=new jsPDF(),ct=csbill.customer_type||'customer',pc=csbill.price_columns?csbill.price_columns.split(','):['mrp','sp','bp'],bn=getBillNum(csbill),sid=csbill.stockist_id||'';doc.setFontSize(20);doc.setFont(undefined,'bold');doc.text('SK AAYURVEDA',105,18,{align:'center'});doc.setFontSize(11);doc.setFont(undefined,'normal');doc.text('KEVA SUPER STOCK POINT',105,25,{align:'center'});doc.setDrawColor(44,62,80);doc.line(14,29,196,29);doc.setFontSize(10);doc.setFont(undefined,'bold');doc.text('Bill No: '+bn,14,37);if(sid)doc.text('Stockist ID: '+sid,14,43);doc.text('Date: '+new Date(csbill.date).toLocaleDateString(),140,sid?43:37);const iy=sid?50:46;doc.setFont(undefined,'bold');doc.text('Bill To:',14,iy);doc.setFont(undefined,'normal');doc.text(csbill.cust_name||'N/A',14,iy+6);doc.text('Type: '+ct.toUpperCase(),14,iy+12);if(csbill.cust_mobile)doc.text('Mobile: '+csbill.cust_mobile,14,iy+18);const ty=sid?78:72;let h,td,cs;if(ct==='stockist'){h=[['#','ITEM','QTY']];cs={0:{cellWidth:10},1:{cellWidth:50},2:{cellWidth:12,halign:'center'}};let ci=3;if(pc.includes('mrp')){h[0].push('MRP','T.MRP');cs[ci]={cellWidth:18,halign:'right'};cs[ci+1]={cellWidth:20,halign:'right'};ci+=2}if(pc.includes('sp')){h[0].push('SP','T.SP');cs[ci]={cellWidth:18,halign:'right'};cs[ci+1]={cellWidth:20,halign:'right'};ci+=2}if(pc.includes('bp')){h[0].push('BP','T.BP');cs[ci]={cellWidth:18,halign:'right'};cs[ci+1]={cellWidth:20,halign:'right'}}td=csbi.map((i,x)=>{const r=[x+1,i.item_name||'Unknown',i.qty||0];if(pc.includes('mrp'))r.push((i.mrp||0).toFixed(2),((i.mrp||0)*(i.qty||0)).toFixed(2));if(pc.includes('sp'))r.push((i.sp||0).toFixed(2),((i.sp||0)*(i.qty||0)).toFixed(2));if(pc.includes('bp'))r.push((i.bp||0).toFixed(2),((i.bp||0)*(i.qty||0)).toFixed(2));return r})}else if(ct==='distributor'){h=[['#','ITEM NAME','QTY','MRP','T.MRP','BP','T.BP']];cs={0:{cellWidth:8},1:{cellWidth:55},2:{cellWidth:12,halign:'center'},3:{cellWidth:18,halign:'right'},4:{cellWidth:20,halign:'right'},5:{cellWidth:18,halign:'right'},6:{cellWidth:20,halign:'right'}};td=csbi.map((i,x)=>[x+1,cleanProductName(i.item_name||'Unknown',ct),i.qty||0,(i.mrp||0).toFixed(2),((i.mrp||0)*(i.qty||0)).toFixed(2),(i.bp||0).toFixed(2),((i.bp||0)*(i.qty||0)).toFixed(2)])}else{h=[['#','ITEM NAME','QTY','MRP','TOTAL']];cs={0:{cellWidth:10},1:{cellWidth:80},2:{cellWidth:15,halign:'center'},3:{cellWidth:25,halign:'right'},4:{cellWidth:30,halign:'right'}};td=csbi.map((i,x)=>[x+1,cleanProductName(i.item_name||'Unknown',ct),i.qty||0,(i.mrp||0).toFixed(2),((i.mrp||0)*(i.qty||0)).toFixed(2)])}doc.autoTable({startY:ty,head:h,body:td,theme:'grid',headStyles:{fillColor:[44,62,80],textColor:255,fontSize:9},bodyStyles:{fontSize:8},columnStyles:cs,margin:{left:14,right:14}});const fy=doc.lastAutoTable.finalY+10;doc.setFontSize(11);let y=fy;if(ct==='stockist'){if(pc.includes('mrp')){doc.setFont(undefined,'bold');doc.text('Total MRP:',130,y);doc.setFont(undefined,'normal');doc.text('Rs. '+(csbill.total_mrp||0).toFixed(2),196,y,{align:'right'});y+=7}if(pc.includes('sp')){doc.setFont(undefined,'bold');doc.text('Total SP:',130,y);doc.setFont(undefined,'normal');doc.text('Rs. '+(csbill.total_sp||0).toFixed(2),196,y,{align:'right'});y+=7}if(pc.includes('bp')){doc.setFontSize(13);doc.setFont(undefined,'bold');doc.text('Total BP:',130,y);doc.setTextColor(39,174,96);doc.text((csbill.total_bp||0).toFixed(2),196,y,{align:'right'});doc.setTextColor(0,0,0);y+=9}}else if(ct==='distributor'){doc.setFont(undefined,'bold');doc.text('Total MRP:',130,y);doc.setFont(undefined,'normal');doc.text('Rs. '+(csbill.total_mrp||0).toFixed(2),196,y,{align:'right'});y+=7;doc.setFontSize(13);doc.setFont(undefined,'bold');doc.text('Total BP:',130,y);doc.setTextColor(39,174,96);doc.text((csbill.total_bp||0).toFixed(2),196,y,{align:'right'});doc.setTextColor(0,0,0);y+=9}else{doc.setFontSize(13);doc.setFont(undefined,'bold');doc.text('Total MRP:',130,y);doc.setTextColor(39,174,96);doc.text('Rs. '+(csbill.total_mrp||0).toFixed(2),196,y,{align:'right'});doc.setTextColor(0,0,0);y+=9}doc.setFontSize(10);doc.setFont(undefined,'italic');doc.text('Thank you for your business!',105,y+10,{align:'center'});doc.setFont(undefined,'bold');doc.setTextColor(39,174,96);doc.text('Please visit again!',105,y+18,{align:'center'});doc.setTextColor(0,0,0);const fn=bn+'_'+(csbill.cust_name||'Unknown').replace(/[^a-z0-9]/gi,'_')+'_'+new Date(csbill.date).toISOString().split('T')[0]+'.pdf';if(window.Capacitor&&window.Capacitor.Plugins&&window.Capacitor.Plugins.Filesystem){try{const FS=window.Capacitor.Plugins.Filesystem,pdf=doc.output('datauristring').split(',')[1];await FS.writeFile({path:fn,data:pdf,directory:'CACHE',recursive:true});const uri=await FS.getUri({path:fn,directory:'CACHE'});if(window.Capacitor.Plugins.Share){try{await window.Capacitor.Plugins.Share.share({title:'Bill - '+bn,text:'Bill for '+(csbill.cust_name||'Customer'),url:uri.uri,dialogTitle:'Share Bill PDF'});return}catch(e){}}if(window.Capacitor.Plugins.Browser){await window.Capacitor.Plugins.Browser.open({url:uri.uri});return}alert('✅ PDF saved: '+fn);return}catch(e){}}doc.save(fn);alert('✅ PDF downloaded: '+fn)}catch(e){alert('❌ PDF Error: '+e.message)}}
+async function shareViaPDF(){try{closeShareModal();if(!csbill||!csbi){alert('❌ Bill data not available');return}const{jsPDF}=window.jspdf,doc=new jsPDF(),ct=csbill.customer_type||'customer',pc=csbill.price_columns?csbill.price_columns.split(','):['mrp','sp','bp'],bn=getBillNum(csbill),sid=csbill.stockist_id||'';doc.setFontSize(20);doc.setFont(undefined,'bold');doc.text('SK AAYURVEDA',105,18,{align:'center'});doc.setFontSize(11);doc.setFont(undefined,'normal');doc.text('KEVA SUPER STOCK POINT',105,25,{align:'center'});doc.setDrawColor(44,62,80);doc.line(14,29,196,29);doc.setFontSize(10);doc.setFont(undefined,'bold');doc.text('Bill No: '+bn,14,37);if(sid)doc.text('Stockist ID: '+sid,14,43);doc.text('Date: '+new Date(csbill.date).toLocaleDateString(),140,sid?43:37);const iy=sid?50:46;doc.setFont(undefined,'bold');doc.text('Bill To:',14,iy);doc.setFont(undefined,'normal');doc.text(csbill.cust_name||'N/A',14,iy+6);doc.text('Type: '+ct.toUpperCase(),14,iy+12);if(csbill.cust_mobile)doc.text('Mobile: '+csbill.cust_mobile,14,iy+18);const ty=sid?78:72;let h,td,cs;if(ct==='stockist'){h=[['#','ITEM','QTY']];cs={0:{cellWidth:10},1:{cellWidth:50},2:{cellWidth:12,halign:'center'}};let ci=3;if(pc.includes('mrp')){h[0].push('MRP','T.MRP');cs[ci]={cellWidth:18,halign:'right'};cs[ci+1]={cellWidth:20,halign:'right'};ci+=2}if(pc.includes('sp')){h[0].push('DP','T.DP');cs[ci]={cellWidth:18,halign:'right'};cs[ci+1]={cellWidth:20,halign:'right'};ci+=2}if(pc.includes('bp')){h[0].push('BP','T.BP');cs[ci]={cellWidth:18,halign:'right'};cs[ci+1]={cellWidth:20,halign:'right'}}td=csbi.map((i,x)=>{const r=[x+1,i.item_name||'Unknown',i.qty||0];if(pc.includes('mrp'))r.push((i.mrp||0).toFixed(2),((i.mrp||0)*(i.qty||0)).toFixed(2));if(pc.includes('sp'))r.push((i.sp||0).toFixed(2),((i.sp||0)*(i.qty||0)).toFixed(2));if(pc.includes('bp'))r.push((i.bp||0).toFixed(2),((i.bp||0)*(i.qty||0)).toFixed(2));return r})}else if(ct==='distributor'){h=[['#','ITEM NAME','QTY','MRP','T.MRP','BP','T.BP']];cs={0:{cellWidth:8},1:{cellWidth:55},2:{cellWidth:12,halign:'center'},3:{cellWidth:18,halign:'right'},4:{cellWidth:20,halign:'right'},5:{cellWidth:18,halign:'right'},6:{cellWidth:20,halign:'right'}};td=csbi.map((i,x)=>[x+1,cleanProductName(i.item_name||'Unknown',ct),i.qty||0,(i.mrp||0).toFixed(2),((i.mrp||0)*(i.qty||0)).toFixed(2),(i.bp||0).toFixed(2),((i.bp||0)*(i.qty||0)).toFixed(2)])}else{h=[['#','ITEM NAME','QTY','MRP','TOTAL']];cs={0:{cellWidth:10},1:{cellWidth:80},2:{cellWidth:15,halign:'center'},3:{cellWidth:25,halign:'right'},4:{cellWidth:30,halign:'right'}};td=csbi.map((i,x)=>[x+1,cleanProductName(i.item_name||'Unknown',ct),i.qty||0,(i.mrp||0).toFixed(2),((i.mrp||0)*(i.qty||0)).toFixed(2)])}doc.autoTable({startY:ty,head:h,body:td,theme:'grid',headStyles:{fillColor:[44,62,80],textColor:255,fontSize:9},bodyStyles:{fontSize:8},columnStyles:cs,margin:{left:14,right:14}});const fy=doc.lastAutoTable.finalY+10;doc.setFontSize(11);let y=fy;if(ct==='stockist'){if(pc.includes('mrp')){doc.setFont(undefined,'bold');doc.text('Total MRP:',130,y);doc.setFont(undefined,'normal');doc.text('Rs. '+(csbill.total_mrp||0).toFixed(2),196,y,{align:'right'});y+=7}if(pc.includes('sp')){doc.setFont(undefined,'bold');doc.text('Total DP:',130,y);doc.setFont(undefined,'normal');doc.text('Rs. '+(csbill.total_sp||0).toFixed(2),196,y,{align:'right'});y+=7}if(pc.includes('bp')){doc.setFontSize(13);doc.setFont(undefined,'bold');doc.text('Total BP:',130,y);doc.setTextColor(39,174,96);doc.text((csbill.total_bp||0).toFixed(2),196,y,{align:'right'});doc.setTextColor(0,0,0);y+=9}}else if(ct==='distributor'){doc.setFont(undefined,'bold');doc.text('Total MRP:',130,y);doc.setFont(undefined,'normal');doc.text('Rs. '+(csbill.total_mrp||0).toFixed(2),196,y,{align:'right'});y+=7;doc.setFontSize(13);doc.setFont(undefined,'bold');doc.text('Total BP:',130,y);doc.setTextColor(39,174,96);doc.text((csbill.total_bp||0).toFixed(2),196,y,{align:'right'});doc.setTextColor(0,0,0);y+=9}else{doc.setFontSize(13);doc.setFont(undefined,'bold');doc.text('Total MRP:',130,y);doc.setTextColor(39,174,96);doc.text('Rs. '+(csbill.total_mrp||0).toFixed(2),196,y,{align:'right'});doc.setTextColor(0,0,0);y+=9}doc.setFontSize(10);doc.setFont(undefined,'italic');doc.text('Thank you for your business!',105,y+10,{align:'center'});doc.setFont(undefined,'bold');doc.setTextColor(39,174,96);doc.text('Please visit again!',105,y+18,{align:'center'});doc.setTextColor(0,0,0);const fn=bn+'_'+(csbill.cust_name||'Unknown').replace(/[^a-z0-9]/gi,'_')+'_'+new Date(csbill.date).toISOString().split('T')[0]+'.pdf';if(window.Capacitor&&window.Capacitor.Plugins&&window.Capacitor.Plugins.Filesystem){try{const FS=window.Capacitor.Plugins.Filesystem,pdf=doc.output('datauristring').split(',')[1];await FS.writeFile({path:fn,data:pdf,directory:'CACHE',recursive:true});const uri=await FS.getUri({path:fn,directory:'CACHE'});if(window.Capacitor.Plugins.Share){try{await window.Capacitor.Plugins.Share.share({title:'Bill - '+bn,text:'Bill for '+(csbill.cust_name||'Customer'),url:uri.uri,dialogTitle:'Share Bill PDF'});return}catch(e){}}if(window.Capacitor.Plugins.Browser){await window.Capacitor.Plugins.Browser.open({url:uri.uri});return}alert('✅ PDF saved: '+fn);return}catch(e){}}doc.save(fn);alert('✅ PDF downloaded: '+fn)}catch(e){alert('❌ PDF Error: '+e.message)}}
 
+
+
+// ==========================================================
+// IMPORT FIX: Skip duplicate bill_numbers
+// ==========================================================
+(function(){
+    var originalImportData = window.importData;
+    
+    window.importData = async function(e){
+        var f = (e && e.target && e.target.files && e.target.files[0]) ? e.target.files[0] : null;
+        if(!f) return;
+        if(e.target) e.target.value = '';
+        
+        var se = document.getElementById('backup-status');
+        if(!confirm('⚠️ MERGE DATA?\n\n📁 '+f.name+'\n\n• New items added\n• Existing kept\n• Duplicate bill numbers skipped')) return;
+        
+        try{
+            if(se){ se.innerText='⏳ Reading...'; se.style.color='orange'; }
+            var text = await f.text();
+            var bd;
+            try{ bd = JSON.parse(text); }catch(e){ throw new Error('Invalid JSON'); }
+            if(!bd.bills) throw new Error('No bills in file');
+
+            if(se){ se.innerText='Merging...'; se.style.color='orange'; }
+
+            // customers
+            var custMap = {};
+            try{ (await DB.query('customers')).forEach(function(c){ custMap[(c.name||'').toLowerCase()+'|'+((c.mobile||'').replace(/\D/g,''))] = c; }); }catch(e){}
+            var newCust = 0;
+            for (const c of (bd.customers||[])){
+                var k = (c.name||'').toLowerCase()+'|'+((c.mobile||'').replace(/\D/g,''));
+                if(custMap[k]) continue;
+                var cid = await DB.run('customers', {name:c.name, mobile:c.mobile||'', customer_type:c.customer_type||'customer'});
+                custMap[k] = {id:cid};
+                newCust++;
+            }
+
+            // products
+            var prodNew = 0, manNew = 0;
+            for (const p of (bd.products||[])){ await DB.run('products', p); prodNew++; }
+            for (const p of (bd.manual_products||[])){ await DB.run('manual_products', p); manNew++; }
+
+            // bills - skip duplicates by bill_number
+            var have = {};
+            try{ (await DB.query('bills')).forEach(function(b){ have[String(b.bill_number||'').toUpperCase()] = b.id; }); }catch(e){}
+            var idMap = {}, addedB = 0, skipB = 0;
+            for (const b of (bd.bills||[])){
+                var num = String(b.bill_number||'').toUpperCase();
+                if(num && have[num]){ skipB++; continue; }
+                var ck = (b.cust_name||'').toLowerCase()+'|'+((b.cust_mobile||'').replace(/\D/g,''));
+                var cust = custMap[ck];
+                var nid = await DB.run('bills', {
+                    bill_number:b.bill_number,
+                    customer_id: cust?cust.id:null,
+                    cust_name:b.cust_name, cust_mobile:b.cust_mobile||'',
+                    customer_type:b.customer_type||'customer',
+                    date:b.date,
+                    total_mrp:b.total_mrp||0, total_sp:b.total_sp||0, total_bp:b.total_bp||0,
+                    price_columns:b.price_columns||'mrp,sp,bp',
+                    bp_status:b.bp_status||'pending',
+                    stockist_id:b.stockist_id||'',
+                    bp_done_date:b.bp_done_date||null, bp_done_remarks:b.bp_done_remarks||null
+                });
+                idMap[b.id] = nid;
+                if(num) have[num] = nid;
+                addedB++;
+            }
+
+            // items
+            var addedI = 0;
+            for (const it of (bd.bill_items||[])){
+                var nid2 = idMap[it.bill_id];
+                if(!nid2) continue;
+                await DB.run('bill_items', {
+                    bill_id:nid2, item_name:it.item_name,
+                    mrp:it.mrp||0, sp:it.sp||0, bp:it.bp||0, qty:it.qty||0,
+                    tot_mrp:it.tot_mrp||0, tot_sp:it.tot_sp||0, tot_bp:it.tot_bp||0
+                });
+                addedI++;
+            }
+
+            // requirements
+            var reqNew = 0;
+            for (const r of (bd.requirements||[])){ await DB.run('requirements', r); reqNew++; }
+
+            if(se){ se.innerText='✅ Merged!'; se.style.color='green'; }
+            alert('✅ Merge Complete!\n\nBills: '+addedB+' | Items: '+addedI+' | Customers: '+newCust+'\nDuplicate bills skipped: '+skipB);
+            if(typeof refreshDropdownCache === 'function') await refreshDropdownCache();
+            if(typeof loadHistoryCustomers === 'function') loadHistoryCustomers();
+        }catch(e){
+            if(se){ se.innerText='❌ '+e.message; se.style.color='red'; }
+            alert('❌ '+e.message);
+        }
+    };
+    
+    console.log('✅ Import fix applied (duplicate-skip)');
+})();

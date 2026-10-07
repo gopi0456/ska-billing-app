@@ -67,3 +67,24 @@ alert('ℹ️ No previous Stockist ID found for this customer.\n\nYou can type a
 }
 }
 
+
+
+// ==========================================================
+// BL-BILLNUM-V1 : overflow-safe bill numbers (SKAA10000+)
+// Old bills keep their numbers forever - nothing is lost
+// ==========================================================
+async function generateBillNumber(){
+    var bills = (await DB.query('bills')) || [];
+    var exists = {};
+    var max = 0;
+    bills.forEach(function(b){
+        var num = String(b.bill_number||'').toUpperCase();
+        exists[num] = 1;
+        var m = num.match(/(\d+)$/);
+        if(m){ var n = parseInt(m[1],10); if(n > max) max = n; }
+    });
+    var next = max + 1;
+    var bn = 'SKAA' + String(next).padStart(4, '0');
+    while(exists[bn]){ next++; bn = 'SKAA' + String(next).padStart(4, '0'); }
+    return bn;
+}

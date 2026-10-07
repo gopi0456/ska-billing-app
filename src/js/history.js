@@ -41,7 +41,7 @@ async function showCustomerHistory(name,mobile){document.getElementById('history
 currentCustomerBills=bills;
 if(document.getElementById('monthly-filter'))document.getElementById('monthly-filter').value='all';
 updateMonthlySummary();
-let billHtml='';if(bills.length===0){billHtml='<p style="text-align:center;color:#888;padding:20px;">No bills found.</p>'}else{billHtml=bills.map(b=>{const tc=`type-${b.customer_type||'customer'}`,tl=(b.customer_type||'customer').toUpperCase();const bpStatus=String(b.bp_status||'pending').toLowerCase();const billNum=getBillNum(b);const isDone=(bpStatus==='done'||bpStatus==='completed');const cls=isDone?'bill-item completed':'bill-item';const sid=b.stockist_id||'';const doneDate=b.bp_done_date||'';const remarks=b.bp_done_remarks||'';const bpColor=isDone?'#95a5a6':'#27ae60';let bpHtml='';if(isDone){bpHtml=`<span class="bp-status-badge bp-done">✅ BP DONE</span>`;if(doneDate)bpHtml+=`<div style="font-size:0.72rem;color:#155724;margin-top:2px;">📅 ${new Date(doneDate).toLocaleString()}</div>`;if(remarks)bpHtml+=`<div class="remarks-text">📝 ${remarks}</div>`}else{bpHtml=`<span class="bp-status-badge bp-pending">⏳ BP PENDING</span>`}let actionsHtml='';if(isDone){actionsHtml=`<button class="btn btn-edit btn-small btn-disabled" disabled><span class="btn-icon">✏️</span> Edit</button><button class="btn btn-danger btn-small btn-disabled" disabled><span class="btn-icon">🗑️</span> Delete</button>`}else{actionsHtml=`<button class="btn btn-edit btn-small" onclick="openEditModal(${b.id})"><span class="btn-icon">✏️</span> Edit</button><button class="btn btn-danger btn-small" onclick="deleteBill(${b.id},'${name.replace(/'/g,"\\'")}','${(mobile||'').replace(/'/g,"\\'")}')"><span class="btn-icon">🗑️</span> Delete</button><button class="btn btn-done btn-small" onclick="markBpDone(${b.id},'${name.replace(/'/g,"\\'")}','${(mobile||'').replace(/'/g,"\\'")}')"><span class="btn-icon">✅</span> BP Done</button>`}return`<div class="${cls}" style="cursor:default;"><div style="margin-bottom:6px;"><span class="bill-number-badge" onclick="viewBillDetails(${b.id})" title="Click to view">#${billNum}</span><span class="customer-type-badge ${tc}" style="font-size:0.65rem;padding:2px 8px;">${tl}</span>${sid?`<span class="stockist-id-badge">🏪 ${sid}</span>`:''}${bpHtml}</div><div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;"><div><strong>📅 ${new Date(b.date).toLocaleDateString()}</strong><div style="color:#666;font-size:0.82rem;margin-top:4px;">💲 MRP: Rs. ${(b.total_mrp||0).toFixed(2)} | 💰 BP: ${(b.total_bp||0).toFixed(2)}</div></div><div style="font-weight:bold;color:${bpColor};font-size:1.1rem;">${(b.total_bp||0).toFixed(2)} BP</div></div><div class="bill-actions">${actionsHtml}<button class="btn btn-share btn-small" onclick="openShareModal(${b.id})"><span class="btn-icon">📤</span> Share</button></div></div>`}).join('')}document.getElementById('detail-bill-list').innerHTML=billHtml}
+let billHtml='';if(bills.length===0){billHtml='<p style="text-align:center;color:#888;padding:20px;">No bills found.</p>'}else{billHtml=bills.map(b=>{const tc=`type-${b.customer_type||'customer'}`,tl=(b.customer_type||'customer').toUpperCase();const bpStatus=String(b.bp_status||'pending').toLowerCase();const billNum=getBillNum(b);const isDone=(bpStatus==='done'||bpStatus==='completed');const cls=isDone?'bill-item completed':'bill-item';const sid=b.stockist_id||'';const doneDate=b.bp_done_date||'';const remarks=b.bp_done_remarks||'';const bpColor=isDone?'#95a5a6':'#27ae60';let bpHtml='';if(isDone){bpHtml=`<span class="bp-status-badge bp-done">✅ BP DONE</span>`;if(doneDate)bpHtml+=`<div style="font-size:0.72rem;color:#155724;margin-top:2px;">📅 ${new Date(doneDate).toLocaleString()}</div>`;if(remarks)bpHtml+=`<div class="remarks-text">📝 ${remarks}</div>`}else{bpHtml=`<span class="bp-status-badge bp-pending">⏳ BP PENDING</span>`}let actionsHtml='';if(isDone){actionsHtml=`<button class="btn btn-edit btn-small btn-disabled" disabled><span class="btn-icon">✏️</span> Edit</button><button class="btn btn-danger btn-small btn-disabled" disabled><span class="btn-icon">🗑️</span> Delete</button>`}else{actionsHtml=`<button class="btn btn-edit btn-small" onclick="openEditModal(${b.id})"><span class="btn-icon">✏️</span> Edit</button><button class="btn btn-danger btn-small" onclick="deleteBill(${b.id},'${name.replace(/'/g,"\\'")}','${(mobile||'').replace(/'/g,"\\'")}')"><span class="btn-icon">🗑️</span> Delete</button><button class="btn btn-done btn-small" onclick="markBpDone(${b.id},'${name.replace(/'/g,"\\'")}','${(mobile||'').replace(/'/g,"\\'")}')"><span class="btn-icon">✅</span> BP Done</button>`}return`<div class="${cls}" style="cursor:default;"><div style="margin-bottom:6px;"><span class="bill-number-badge" onclick="viewBillDetails(${b.id})" title="Click to view">#${billNum}</span><span class="customer-type-badge ${tc}" style="font-size:0.65rem;padding:2px 8px;">${tl}</span>${(b.customer_type==='stockist'||sid)?`<span class="stockist-id-badge">🏪 ${sid||'NA'}</span>`:''}${bpHtml}</div><div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;"><div><strong>📅 ${new Date(b.date).toLocaleDateString()}</strong><div style="color:#666;font-size:0.82rem;margin-top:4px;">💲 MRP: Rs. ${(b.total_mrp||0).toFixed(2)} | 💰 BP: ${(b.total_bp||0).toFixed(2)}</div></div><div style="font-weight:bold;color:${bpColor};font-size:1.1rem;">${(b.total_bp||0).toFixed(2)} BP</div></div><div class="bill-actions">${actionsHtml}<button class="btn btn-share btn-small" onclick="openShareModal(${b.id})"><span class="btn-icon">📤</span> Share</button></div></div>`}).join('')}document.getElementById('detail-bill-list').innerHTML=billHtml}
 
 async function markBpDone(billId,custName,custMobile){if(!confirm('⚠️ Mark BP as DONE?\n\nThis will PERMANENTLY disable Edit and Delete for this bill.'))return;const remarks=prompt('📝 Enter remarks for BP Done:\n\n(e.g., "Payment received via UPI", "Cash settled")');if(remarks===null)return;const now=new Date().toISOString();try{await DB.update('bills',billId,{bp_status:'done',bp_done_date:now,bp_done_remarks:remarks||''});alert('✅ BP marked as DONE!\n\n📅 '+new Date(now).toLocaleString()+'\n📝 '+(remarks||'No remarks'));await refreshDropdownCache();await showCustomerHistory(custName,custMobile);await loadHistoryCustomers()}catch(err){alert('❌ Error: '+err.message)}}
 
@@ -85,7 +85,7 @@ async function openAddCustomerModal(){const html=`<div style="background:#f8f9fa
 
 function closeAddCustomerModal(){document.getElementById('add-cust-modal').style.display='none'}
 
-async function saveNewCustomer(){const name=document.getElementById('new-cust-name').value.trim();const mobile=document.getElementById('new-cust-mobile').value.trim();const type=document.getElementById('new-cust-type').value;const sid=document.getElementById('new-cust-stockist-id').value.trim();if(!name){alert('⚠️ Customer name required');return}if(type==='stockist'&&!sid){if(!confirm('⚠️ Stockist ID is empty.\n\nContinue without Stockist ID?'))return}try{const cs=await DB.query('customers');const existing=cs.find(c=>c.name.toLowerCase()===name.toLowerCase()&&(c.mobile||'').replace(/\D/g,'')===mobile.replace(/\D/g,''));if(existing){alert('⚠️ Customer already exists!\n\nUse Edit button to modify.');return}await DB.run('customers',{name,mobile,customer_type:type});if(type==='stockist'&&sid){const newCust=(await DB.query('customers')).find(c=>c.name===name&&(c.mobile||'')===mobile);if(newCust){const bn='SKAA'+String(Date.now()).slice(-4);await DB.run('bills',{bill_number:bn,customer_id:newCust.id,cust_name:name,cust_mobile:mobile,customer_type:type,date:new Date().toISOString(),total_mrp:0,total_sp:0,total_bp:0,price_columns:'mrp,sp,bp',bp_status:'done',stockist_id:sid,bp_done_date:new Date().toISOString(),bp_done_remarks:'Customer created with Stockist ID'})}}alert('✅ Customer added!\n\n👤 '+name+'\n🏷️ '+type.toUpperCase()+(sid?'\n🏪 '+sid:''));closeAddCustomerModal();renderCustomerManagement();await refreshDropdownCache()}catch(err){alert('❌ Error: '+err.message)}}
+async function saveNewCustomer(){const name=document.getElementById('new-cust-name').value.trim();const mobile=document.getElementById('new-cust-mobile').value.trim();const type=document.getElementById('new-cust-type').value;const sid=document.getElementById('new-cust-stockist-id').value.trim();if(!name){alert('⚠️ Customer name required');return}if(type==='stockist'&&!sid){if(!confirm('⚠️ Stockist ID is empty.\n\nContinue without Stockist ID?'))return}try{const cs=await DB.query('customers');const existing=cs.find(c=>c.name.toLowerCase()===name.toLowerCase()&&(c.mobile||'').replace(/\D/g,'')===mobile.replace(/\D/g,''));if(existing){alert('⚠️ Customer already exists!\n\nUse Edit button to modify.');return}await DB.run('customers',{name,mobile,customer_type:type});if(type==='stockist'&&sid){const newCust=(await DB.query('customers')).find(c=>c.name===name&&(c.mobile||'')===mobile);if(newCust){const bn=await generateBillNumber();await DB.run('bills',{bill_number:bn,customer_id:newCust.id,cust_name:name,cust_mobile:mobile,customer_type:type,date:new Date().toISOString(),total_mrp:0,total_sp:0,total_bp:0,price_columns:'mrp,sp,bp',bp_status:'done',stockist_id:sid,bp_done_date:new Date().toISOString(),bp_done_remarks:'Customer created with Stockist ID'})}}alert('✅ Customer added!\n\n👤 '+name+'\n🏷️ '+type.toUpperCase()+(sid?'\n🏪 '+sid:''));closeAddCustomerModal();renderCustomerManagement();await refreshDropdownCache()}catch(err){alert('❌ Error: '+err.message)}}
 
 
 
@@ -116,26 +116,40 @@ async function blRender(){
         var pages = Math.max(1, Math.ceil(bills.length/BL.per));
         if(BL.page>pages) BL.page=pages;
         var slice = bills.slice((BL.page-1)*BL.per, BL.page*BL.per);
-        c.innerHTML = slice.map(function(b){
-            var t=b.customer_type||'customer';
-            var bp=(b.total_bp||0).toFixed(2);
-            return '<div class="bill-item" onclick="openBLModal('+b.id+')" style="cursor:pointer;margin-bottom:12px;">'+
-              '<div style="margin-bottom:6px;">'+
-                '<span class="bill-number-badge">#'+getBillNum(b)+'</span> '+
-                '<span class="customer-type-badge type-'+t+'" style="font-size:0.65rem;padding:2px 8px;">'+t.toUpperCase()+'</span> '+
-                ((String(b.bp_status||'pending').toLowerCase()==='done')?'<span class="bp-status-badge bp-done">BP DONE</span>':'<span class="bp-status-badge bp-pending">BP PENDING</span>')+
-              '</div>'+
-              '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;">'+
-                '<div><strong>'+new Date(b.date).toLocaleDateString()+'</strong>'+
-                '<div style="color:#666;font-size:0.82rem;margin-top:4px;">MRP: Rs. '+(b.total_mrp||0).toFixed(2)+' | BP: '+bp+'</div>'+
-                '<div style="color:#333;font-size:0.9rem;margin-top:4px;">'+(b.cust_name||'Unknown')+'</div></div>'+
-                '<div style="font-weight:bold;color:#27ae60;font-size:1.1rem;">'+bp+' BP</div>'+
-              '</div></div>';
-        }).join('') || '<p style="text-align:center;color:#888;padding:15px;">No bills found.</p>';
+        var allIt = await DB.query('bill_items');
+        var cnt = {};
+        allIt.forEach(function(i){ cnt[i.bill_id]=(cnt[i.bill_id]||0)+1; });
+        var html = '';
+        for(var x=0;x<slice.length;x++){
+            var b = slice[x];
+            var t = b.customer_type||'customer';
+            var bp = (b.total_bp||0).toFixed(2);
+            var st = String(b.bp_status||'pending').toLowerCase();
+            var done = (st==='done'||st==='completed');
+            var sid = (b.stockist_id||'').trim();
+            html += '<div class="bill-item" onclick="openBLModal('+b.id+')" style="cursor:pointer;margin-bottom:12px;">';
+            html += '<div style="margin-bottom:6px;">';
+            html += '<span class="bill-number-badge">#'+getBillNum(b)+'</span> ';
+            html += '<span class="customer-type-badge type-'+t+'" style="font-size:0.65rem;padding:2px 8px;">'+t.toUpperCase()+'</span> ';
+            if(t==='stockist'){ html += '<span class="stockist-id-badge">🏪 '+(sid||'NA')+'</span> '; }
+            html += done ? '<span class="bp-status-badge bp-done">BP DONE</span>' : '<span class="bp-status-badge bp-pending">BP PENDING</span>';
+            html += '</div>';
+            html += '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;">';
+            html += '<div><strong>'+new Date(b.date).toLocaleDateString()+'</strong>';
+            html += '<div style="color:#666;font-size:0.82rem;margin-top:4px;">MRP: Rs. '+(b.total_mrp||0).toFixed(2)+' | BP: '+bp+'</div>';
+            html += '<div style="color:#333;font-size:0.9rem;margin-top:4px;">'+(b.cust_name||'Unknown')+'</div></div>';
+            html += '<div style="font-weight:bold;color:'+(done?'#95a5a6':'#27ae60')+';font-size:1.1rem;">'+bp+' BP</div>';
+            html += '</div>';
+            html += '<div style="margin-top:8px;display:flex;justify-content:space-between;align-items:center;">';
+            html += '<span style="color:#888;font-size:0.8rem;">🛒 '+(cnt[b.id]||0)+' items</span>';
+            html += '<button onclick="event.stopPropagation();openShareModal('+b.id+')" style="padding:6px 14px;background:#3498db;color:#fff;border:none;border-radius:6px;font-size:0.8rem;font-weight:600;cursor:pointer;">📤 Share</button>';
+            html += '</div></div>';
+        }
+        c.innerHTML = html || '<p style="text-align:center;color:#888;padding:15px;">No bills found.</p>';
         document.getElementById('blx-info').innerText='Page '+BL.page+' of '+pages;
         document.getElementById('blx-prev').disabled = (BL.page===1);
         document.getElementById('blx-next').disabled = (BL.page===pages);
-    }catch(e){ console.error('blRender',e); }
+    }catch(e){ console.error('blRender', e); }
 }
 
 async function blGetProducts(){
@@ -189,6 +203,7 @@ function blRenderModal(){
       '<div><div style="font-size:.7rem;color:#28a745;">TOTAL BP</div><div style="font-size:1.1rem;font-weight:800;color:#28a745;">Rs. <span id="bl-t-bp">0.00</span></div></div></div>'+
       '<div style="display:flex;gap:10px;margin-top:15px;">'+
       '<button onclick="blClose()" style="flex:1;padding:12px;background:#e9ecef;border:none;border-radius:8px;font-weight:700;cursor:pointer;">Cancel</button>'+
+      '<button onclick="blClose();openShareModal('+b.id+')" style="flex:1;padding:12px;background:#3498db;color:#fff;border:none;border-radius:8px;font-weight:700;cursor:pointer;">📤 Share</button>'+
       '<button onclick="blSave()" style="flex:1;padding:12px;background:#28a745;color:#fff;border:none;border-radius:8px;font-weight:700;cursor:pointer;">Save Changes</button></div>';
     blTotals();
     var dd=document.getElementById('bl-dd'); if(dd) dd.style.display='none';
@@ -328,3 +343,29 @@ window.addEventListener('load', function(){
         document.body.appendChild(md);
     }, 1200);
 });
+
+
+// ==========================================================
+// BL-SHARE-V1 : Share button on BP-done history cards
+// ==========================================================
+(function(){
+    function fixDoneCards(){
+        var cards = document.querySelectorAll('.bill-item.completed');
+        for(var i=0;i<cards.length;i++){
+            var card = cards[i];
+            if(card.getAttribute('data-sharefix')) continue;
+            card.setAttribute('data-sharefix','1');
+            var m = card.innerHTML.match(/viewBillDetails\((\d+)\)/);
+            if(!m) continue;
+            if(card.innerHTML.indexOf('openShareModal') !== -1) continue;
+            var btn = document.createElement('button');
+            btn.style.cssText = 'width:100%;margin-top:8px;padding:10px;background:#3498db;color:#fff;border:none;border-radius:8px;font-weight:600;cursor:pointer;';
+            btn.innerHTML = '📤 Share';
+            btn.onclick = (function(theId){
+                return function(ev){ ev.stopPropagation(); openShareModal(parseInt(theId,10)); };
+            })(m[1]);
+            card.appendChild(btn);
+        }
+    }
+    setInterval(fixDoneCards, 1000);
+})();
