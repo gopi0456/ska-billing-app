@@ -30,8 +30,30 @@
 .blx-dd{display:none;max-height:220px;overflow-y:auto;background:#fff;border:1px solid #ddd;border-radius:6px;margin-top:5px;box-shadow:0 4px 10px rgba(0,0,0,.1);}
 .blx-dd-row{padding:10px 15px;cursor:pointer;border-bottom:1px solid #f0f0f0;background:#fff;}
 </style>
+
+<style>
+#login-overlay{position:fixed;inset:0;background:linear-gradient(135deg,#1a1a2e,#16213e 50%,#0f3460);z-index:999999;display:flex;align-items:center;justify-content:center}
+.glass-card{background:rgba(255,255,255,.1);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,.2);border-radius:16px;padding:40px 30px;width:90%;max-width:400px;text-align:center}
+.glass-card h2{color:#fff;margin:0 0 8px;font-size:1.7rem}
+.glass-card p{color:#a8d8ea;margin:0 0 25px;font-size:.9rem;letter-spacing:1.5px}
+.glass-input{width:100%;padding:13px 15px;margin-bottom:14px;background:rgba(255,255,255,.95);border:1px solid rgba(255,255,255,.3);border-radius:10px;color:#1a1a2e!important;font-size:1rem;box-sizing:border-box;outline:none}
+.glass-btn{width:100%;padding:13px;background:linear-gradient(135deg,#27ae60,#2ecc71);color:#fff;border:none;border-radius:10px;font-size:1.05rem;font-weight:700;cursor:pointer}
+#login-error{color:#ff6b6b;margin-top:12px;font-size:.9rem;font-weight:600;min-height:18px}
+.user-form-input{width:100%;padding:11px 13px;margin-bottom:10px;border:1.5px solid #e0e0e0;border-radius:8px;font-size:.95rem;box-sizing:border-box;background:#fff}
+</style>
 </head>
 <body>
+<div id="login-overlay">
+  <div class="glass-card">
+    <h2>🕉️ SK AAYURVEDA</h2>
+    <p>KEVA SUPER STOCK POINT</p>
+    <input type="text" id="login-username" class="glass-input" placeholder="Username" autocomplete="off">
+    <input type="password" id="login-password" class="glass-input" placeholder="Password">
+    <button class="glass-btn" onclick="attemptLogin()">Login</button>
+    <div id="login-error"></div>
+  </div>
+</div>
+
 <div class="header"><h2>🕉️ SK AAYURVEDA</h2><div class="subtitle">KEVA SUPER STOCK POINT</div></div>
 <div class="tabs">
 <button class="tab-btn active" data-tab="billing"><span class="tab-icon">🧾</span>Billing</button>
@@ -204,7 +226,7 @@ document.addEventListener('click',function(e){if(e.target===document.getElementB
 async function loadDatalists(){await refreshDropdownCache();setupSearchDropdown('cust-name','cust-list','customers','selectCustomer');setupSearchDropdown('req-cust','cust-list-req','customers','selectReqCustomer');setupSearchDropdown('prod-search','prod-list','products','selectProduct');setupSearchDropdown('req-prod','prod-list-req','products','selectReqProduct');setupSearchDropdown('stockist-id','stockist-id-list','stockists','selectStockistId')}
 
 let cart=[];
-function renderCart(){const m=document.getElementById('show-mrp').checked,s=document.getElementById('show-sp').checked,b=document.getElementById('show-bp').checked;document.getElementById('cart-body').innerHTML=cart.map((i,x)=>{let r=`<tr><td>${i.item_name}${i.qty>1?`<span class="qty-badge">x${i.qty}</span>`:''}</td>`;if(m)r+=`<td>${i.mrp.toFixed(2)}</td>`;if(s)r+=`<td>${i.sp.toFixed(2)}</td>`;if(b)r+=`<td>${i.bp.toFixed(2)}</td>`;r+=`<td><input type="number" value="${i.qty}" min="1" onchange="cart[${x}].qty=parseInt(this.value)||1;renderCart()" style="width:50px"></td>`;if(m)r+=`<td>${(i.mrp*i.qty).toFixed(2)}</td>`;if(s)r+=`<td>${(i.sp*i.qty).toFixed(2)}</td>`;if(b)r+=`<td>${(i.bp*i.qty).toFixed(2)}</td>`;r+=`<td><button class="btn btn-danger" style="width:auto;padding:5px" onclick="cart.splice(${x},1);renderCart()">✕</button></td></tr>`;return r}).join('');let tm=0,ts=0,tb=0;cart.forEach(i=>{tm+=i.mrp*i.qty;ts+=i.sp*i.qty;tb+=i.bp*i.qty});const sg=document.getElementById('summary-grid');sg.innerHTML='';if(m)sg.innerHTML+=`<div class="col-mrp">💲 Total MRP<span>Rs. <span id="tot-mrp">${tm.toFixed(2)}</span></span></div>`;if(s)sg.innerHTML+=`<div class="col-sp">🏷️ Total SP<span>Rs. <span id="tot-sp">${ts.toFixed(2)}</span></span></div>`;if(b)sg.innerHTML+=`<div class="col-bp">💰 Total BP<span><span id="tot-bp">${tb.toFixed(2)}</span> BP</span></div>`}
+function renderCart(){const m=document.getElementById('show-mrp').checked,s=document.getElementById('show-sp').checked,b=document.getElementById('show-bp').checked;document.getElementById('cart-body').innerHTML=cart.map((i,x)=>{let r=`<tr><td>${i.item_name}${i.qty>1?`<span class="qty-badge">x${i.qty}</span>`:''}</td>`;if(m)r+=`<td>${i.mrp.toFixed(2)}</td>`;if(s)r+=`<td>${i.sp.toFixed(2)}</td>`;if(b)r+=`<td>${i.bp.toFixed(2)}</td>`;r+=`<td><input type="number" value="${i.qty}" min="1" onchange="skaQtyChange(${x},this.value)" style="width:50px"></td>`;if(m)r+=`<td>${(i.mrp*i.qty).toFixed(2)}</td>`;if(s)r+=`<td>${(i.sp*i.qty).toFixed(2)}</td>`;if(b)r+=`<td>${(i.bp*i.qty).toFixed(2)}</td>`;r+=`<td><button class="btn btn-danger" style="width:auto;padding:5px" onclick="cart.splice(${x},1);renderCart()">✕</button></td></tr>`;return r}).join('');let tm=0,ts=0,tb=0;cart.forEach(i=>{tm+=i.mrp*i.qty;ts+=i.sp*i.qty;tb+=i.bp*i.qty});const sg=document.getElementById('summary-grid');sg.innerHTML='';if(m)sg.innerHTML+=`<div class="col-mrp">💲 Total MRP<span>Rs. <span id="tot-mrp">${tm.toFixed(2)}</span></span></div>`;if(s)sg.innerHTML+=`<div class="col-sp">🏷️ Total SP<span>Rs. <span id="tot-sp">${ts.toFixed(2)}</span></span></div>`;if(b)sg.innerHTML+=`<div class="col-bp">💰 Total BP<span><span id="tot-bp">${tb.toFixed(2)}</span> BP</span></div>`}
 
 
 
@@ -274,7 +296,16 @@ DB.init().then(async()=>{await refreshDropdownCache();loadDatalists();loadHistor
             }
         } else if (type === 'distributor') {
             mrp.checked = true; sp.checked = false; bp.checked = true;
-            si.disabled = true; si.value = '';
+            var _sku = null; try { _sku = JSON.parse(sessionStorage.getItem('currentUser') || 'null'); } catch(e){}
+            if (_sku && _sku.user_type === 'distributor') {
+                si.disabled = false;
+                si.placeholder = '🏪 Distributor ID';
+                if (name && typeof autoFetchStockistId === 'function' && si.value === '') {
+                    autoFetchStockistId(name, mobile).then(function(id){ if (id) si.value = id; });
+                }
+            } else {
+                si.disabled = true; si.value = '';
+            }
         } else {
             // CUSTOMER or NEW/UNKNOWN
             mrp.checked = true; sp.checked = false; bp.checked = false;
@@ -350,5 +381,5 @@ window.addEventListener('load', () => {
     }, 1000);
 });
 </script>
-</body>
+<script src="js/users.js?v=16_scroll"></script></body>
 </html>
