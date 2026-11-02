@@ -19,5 +19,8 @@
     "@capacitor/share": "^8.0.2",
     "pdfjs-dist": "^6.3.289",
     "read-excel-file": "^9.3.10"
+  },
+  "devDependencies": {
+    "javascript-obfuscator": "^5.9.0"
   }
 }
