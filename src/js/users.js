@@ -973,3 +973,422 @@ window.parsePDF = async function(f){
 
   console.log('✅ V47 Loaded: sticky header restored');
 })();
+
+/* ==== V48-A: getBillText prints ALL enabled price columns (MRP / SP / BP) ==== */
+(function(){
+  var EMOJI = /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}]/gu;
+  function cleanName(t){ return String(t||'').replace(EMOJI,'').replace(/\s+/g,' ').trim(); }
+  var LEAF = '\u{1F33F}';
+
+  window.getBillText = function(){
+    var b = (typeof csbill !== 'undefined') ? csbill : null;
+    var items = (typeof csbi !== 'undefined') ? csbi : [];
+    if (!b || !items || !items.length) return "";
+
+    var u = curUser();
+    var shopName = (u && u.shop_name) ? u.shop_name.toUpperCase() : 'SK AAYURVEDA';
+    var subTitle = (u && u.subtitle) ? u.subtitle.toUpperCase() : 'KEVA SUPER STOCK POINT';
+    var custType = (b.customer_type || '').toLowerCase();
+    var sidLabel = (custType === 'distributor') ? 'Distributor ID' : 'Stockist ID';
+
+    /* which columns are enabled for THIS bill */
+    var cols = String(b.price_columns || 'mrp').split(',');
+    var showM = cols.indexOf('mrp') > -1;
+    var showS = cols.indexOf('sp')  > -1;
+    var showB = cols.indexOf('bp')  > -1;
+
+    var lines = [];
+    lines.push(LEAF + ' *' + shopName + '* ' + LEAF);
+    lines.push(subTitle);
+    lines.push('-------------------------');
+    lines.push('Bill No: *' + (b.bill_number || '') + '*');
+    if (b.stockist_id) lines.push(sidLabel + ': *' + b.stockist_id + '*');
+    lines.push('Date: ' + new Date(b.date).toLocaleString());
+    lines.push('-------------------------');
+    lines.push('Customer: ' + (b.cust_name || ''));
+    lines.push('Type: ' + custType.toUpperCase());
+    lines.push('Mobile: ' + (b.cust_mobile || ''));
+    lines.push('');
+    lines.push('*ITEMS:*');
+
+    items.forEach(function(it, idx){
+      var displayName;
+      if (custType === 'stockist'){
+        displayName = String(it.item_name || '').replace(EMOJI,'').trim();
+        if (/buy|get|offer|free|combo/i.test(String(it.item_name))) displayName = String(it.item_name).replace(/\s*\(P½\)/gi,'').trim();
+      } else {
+        displayName = cleanName(it.item_name);
+      }
+      if (it.unit === 'p') displayName += ' (P½)';
+
+      var unitLine = '   Qty: ' + it.qty;
+      if (showM) unitLine += ' | MRP: ' + parseFloat(it.mrp).toFixed(2);
+      if (showS) unitLine += ' | SP: '  + parseFloat(it.sp).toFixed(2);
+      if (showB) unitLine += ' | BP: '  + parseFloat(it.bp).toFixed(2);
+
+      var totLine = '   Total';
+      if (showM) totLine += ' MRP: Rs. ' + (it.mrp * it.qty).toFixed(2);
+      if (showS) totLine += ' | Total SP: Rs. ' + (it.sp * it.qty).toFixed(2);
+      if (showB) totLine += ' | Total BP: ' + (it.bp * it.qty).toFixed(2);
+
+      lines.push((idx+1) + '. ' + displayName);
+      lines.push(unitLine);
+      lines.push(totLine);
+    });
+
+    lines.push('-------------------------');
+    if (showM) lines.push('Total MRP: Rs. ' + parseFloat(b.total_mrp).toFixed(2));
+    if (showS) lines.push('Total SP: Rs. '  + parseFloat(b.total_sp).toFixed(2));
+    if (showB) lines.push('*TOTAL BP: ' + parseFloat(b.total_bp).toFixed(2) + '*');
+
+    if (b.comments && String(b.comments).trim()){
+      var parts = String(b.comments).split('\n')
+        .map(function(x){ return x.replace(/^📝?\s*Note:\s*/i,'').trim(); })
+        .filter(function(x){ return x.length > 0; });
+      var uniq = [];
+      parts.forEach(function(x){ if (uniq.indexOf(x) === -1) uniq.push(x); });
+      if (uniq.length){ lines.push(''); lines.push('📝 Note: ' + uniq.join(' | ')); }
+    }
+
+    lines.push('');
+    lines.push('Thank you! 🙏');
+    lines.push('*Please visit again!* ✨');
+    return lines.join('\n');
+  };
+})();
+
+/* ==== V48-B: Freeze old timers + make applyUserSettings crash-proof (no random logout) ==== */
+(function(){
+  function stamp(fn, flags){ if (!fn) return; for (var i=0;i<flags.length;i++){ try { fn[flags[i]] = true; } catch(e){} } }
+  function stampAll(){
+    stamp(window.applyUserSettings,  ['__skaStats','__skaV48']);
+    stamp(window.updatePriceDisplay, ['__skaPatched']);
+    stamp(window.selectCustomer,     ['__skaPatched2']);
+    stamp(window.manualFetchStockistId, ['__skaPatched']);
+    stamp(window.autoFetchStockistId,   ['__skaPatched']);
+    stamp(window.openAddCustomerModal,  ['__skaPatched']);
+    stamp(window.saveNewCustomer,       ['__skaPatched']);
+    stamp(window.generateBillNumber,    ['__skaPatched']);
+    stamp(window.renderCart,            ['__skaPatched']);
+    stamp(window.updateMonthlySummary,  ['__skaPatched']);
+    stamp(window.switchSettingsPanel,   ['__skaPatched','__skaStats2']);
+    stamp(window.openShareModal,        ['__skaPatched','__skaLeafBoth']);
+    stamp(window.viewBillDetails,       ['__skaPatched','__skaUnit','__skaComment']);
+    stamp(window.saveBill,              ['__skaStats','__skaUnit','__skaComment']);
+    stamp(window.getBillText,           ['__skaLeaf','__skaBoth','__skaUnitComment','__skaClean']);
+  }
+  stampAll(); setInterval(stampAll, 300);
+
+  /* safe applyUserSettings: branding errors NEVER break login state */
+  if (window.applyUserSettings && !window.applyUserSettings.__skaV48){
+    var _aus = window.applyUserSettings;
+    window.applyUserSettings = function(user){
+      try { sessionStorage.setItem('currentUser', JSON.stringify(user)); } catch(e){}
+      try { return _aus.apply(this, arguments); }
+      catch(err){ console.warn('branding skipped:', err); }
+    };
+    window.applyUserSettings.__skaV48 = true;
+  }
+  console.log('✅ V48 Loaded: full-column share text + logout-proof');
+})();
+
+/* ==== V49: SP -> DP label in WhatsApp/SMS/PDF share (admin & stockist only) ==== */
+(function(){
+  /* 1) getBillText: rename SP column labels to DP */
+  if (window.getBillText && !window.getBillText.__skaDP){
+    var _g = window.getBillText;
+    window.getBillText = function(){
+      var t = _g.apply(this, arguments);
+      if (typeof t === 'string'){
+        /* per-item line: " | SP: 50.00" -> " | DP: 50.00" */
+        t = t.replace(/\|\s*SP:/g, '| DP:');
+        /* totals line: "Total SP: Rs." -> "Total DP: Rs." */
+        t = t.replace(/Total\s+SP:/gi, 'Total DP:');
+        /* standalone header if any: "*SP:*" -> "*DP:*" */
+        t = t.replace(/\*SP:\*/g, '*DP:*');
+      }
+      return t;
+    };
+    window.getBillText.__skaDP = true;
+  }
+
+  /* 2) PDF: intercept autotable headers + total labels via jsPDF.text hook */
+  try {
+    if (window.jspdf && window.jspdf.jsPDF && !window.jspdf.jsPDF.__skaDP){
+      var Prev = window.jspdf.jsPDF;
+      var P49 = function(opts){
+        var d = new Prev(opts);
+        try {
+          var base = d.text.bind(d);
+          d.text = function(txt, x, y, o){
+            if (typeof txt === 'string'){
+              /* table header cell exactly "SP" */
+              if (txt === 'SP') txt = 'DP';
+              /* total row label like "Total SP:" or "TOTAL SP:" */
+              else if (/^total\s+sp:?$/i.test(txt.trim())) txt = txt.replace(/sp/i, 'DP');
+              /* inline price label "| SP: ..." inside a longer string */
+              else if (/\bSP\b/.test(txt)) txt = txt.replace(/\bSP\b/g, 'DP');
+            }
+            return base(txt, x, y, o);
+          };
+        } catch(e){}
+        return d;
+      };
+      P49.prototype = Prev.prototype;
+      P49.API = Prev.API;
+      /* freeze every older patch timer */
+      P49.__skaDP = true;
+      P49.__skaV46 = true; P49.__skaV45 = true; P49.__skaV44 = true; P49.__skaV43 = true;
+      P49.__skaV42 = true; P49.__skaV41 = true;
+      P49.__skaInstancePatched = true; P49.__skaPdfBadge = true; P49.__skaTextPatched = true;
+      P49.__skaCommentText = true; P49.__skaLogo = true; P49.__skaLogoRight = true;
+      window.jspdf.jsPDF = P49;
+    }
+  } catch(e){}
+
+  console.log('✅ V49 Loaded: SP renamed to DP in shares');
+})();
+
+/* ==== V50: LOGIN PERSISTENCE + PERFORMANCE OPTIMIZATION + FLASH PREVENTION ==== */
+(function(){
+  
+  /* ===== FIX 1: Use localStorage instead of sessionStorage for persistent login ===== */
+  var _origCurUser = window.curUser;
+  window.curUser = function(){ 
+    try { 
+      /* Try localStorage first (persistent), fallback to sessionStorage (current session) */
+      var data = localStorage.getItem('currentUser') || sessionStorage.getItem('currentUser');
+      return JSON.parse(data || 'null'); 
+    } catch(e){ return null; } 
+  };
+
+  var _origAttemptLogin = window.attemptLogin;
+  window.attemptLogin = async function(){
+    var u = gv('login-username').trim(), p = gv('login-password'), err = document.getElementById('login-error');
+    if (!u || !p){ if(err) err.textContent = "Please enter username and password"; return; }
+    
+    if (u === 'admin' && p === atob(ADMIN_PASS_B64)){
+      var a = { id:0, username:'admin', name:'Administrator', shop_name:'SK AAYURVEDA', subtitle:'KEVA SUPER STOCK POINT', user_type:'admin', bill_prefix:'', bill_from:'', bill_to:'' };
+      /* Store in BOTH places for maximum compatibility */
+      localStorage.setItem('currentUser', JSON.stringify(a));
+      sessionStorage.setItem('currentUser', JSON.stringify(a));
+      document.getElementById('login-overlay').style.display = 'none';
+      applyUserSettings(a); return;
+    }
+    
+    var users = JSON.parse(localStorage.getItem('ska_users')||'[]');
+    var found = users.find(function(x){ return x.username===u && x.password===p; });
+    if (found){
+      localStorage.setItem('currentUser', JSON.stringify(found));
+      sessionStorage.setItem('currentUser', JSON.stringify(found));
+      document.getElementById('login-overlay').style.display = 'none';
+      applyUserSettings(found);
+    } else { 
+      if(err) err.textContent = "Invalid username or password"; 
+      document.getElementById('login-password').value=''; 
+    }
+  };
+
+  var _origDoLogout = window.doLogout;
+  window.doLogout = function(){ 
+    localStorage.removeItem('currentUser');
+    sessionStorage.removeItem('currentUser'); 
+    location.reload(); 
+  };
+
+  /* Auto-login on page load if currentUser exists in localStorage */
+  window.addEventListener('DOMContentLoaded', function(){
+    var saved = localStorage.getItem('currentUser');
+    if (saved){
+      try {
+        var user = JSON.parse(saved);
+        if (user && user.username){
+          sessionStorage.setItem('currentUser', saved); /* sync to session too */
+          var ov = document.getElementById('login-overlay'); 
+          if (ov) ov.style.display='none';
+          applyUserSettings(user);
+        }
+      } catch(e){}
+    }
+  });
+
+  /* ===== FIX 2: Performance - Replace ALL setInterval with MutationObserver + single RAF loop ===== */
+  
+  /* Kill all existing intervals (they're causing the slowness) */
+  var intervalIds = [];
+  for (var i = 1; i < 10000; i++) {
+    clearInterval(i);
+  }
+  
+  /* Track what needs updating via flags, process once per frame */
+  var pendingUpdates = {
+    header: false,
+    distributorOptions: false,
+    customerBp: false,
+    profileStats: false,
+    qtyInputs: false
+  };
+  
+  /* Single requestAnimationFrame processor */
+  var rafRunning = false;
+  function scheduleUpdate(key){
+    pendingUpdates[key] = true;
+    if (!rafRunning){
+      rafRunning = true;
+      requestAnimationFrame(processPendingUpdates);
+    }
+  }
+  
+  function processPendingUpdates(){
+    rafRunning = false;
+    
+    if (pendingUpdates.header){
+      pendingUpdates.header = false;
+      var u = curUser();
+      if (u) applyHeader(u);
+    }
+    
+    if (pendingUpdates.distributorOptions){
+      pendingUpdates.distributorOptions = false;
+      applyDistributorOptions();
+    }
+    
+    if (pendingUpdates.customerBp){
+      pendingUpdates.customerBp = false;
+      hideCustomerBp();
+    }
+    
+    if (pendingUpdates.profileStats){
+      pendingUpdates.profileStats = false;
+      skaRefreshProfileStats();
+    }
+    
+    if (pendingUpdates.qtyInputs){
+      pendingUpdates.qtyInputs = false;
+      enhanceQtyInputs();
+    }
+  }
+  
+  /* Enhanced qty input handler (called only when needed) */
+  function enhanceQtyInputs(){
+    var body = document.getElementById('cart-body');
+    if (!body) return;
+    var inputs = body.querySelectorAll('input');
+    for (var i=0;i<inputs.length;i++){
+      (function(inp, idx){
+        var item = cart[idx];
+        if (inp.type !== 'text'){
+          inp.type = 'text';
+          inp.inputMode = 'numeric';
+          inp.style.width = '64px';
+          inp.removeAttribute('onchange');
+          inp.onchange = null;
+        }
+        if (item){
+          inp.value = (item.qty||1) + (item.unit === 'p' ? 'p' : 's');
+          var tr = inp.closest('tr');
+          var badge = tr ? tr.querySelector('.qty-badge') : null;
+          if (badge) badge.textContent = 'x' + (item.qty||1) + (item.unit === 'p' ? 'p' : '');
+        }
+        if (!inp.__skaQty){
+          inp.__skaQty = true;
+          inp.addEventListener('change', function(){ window.skaQtyChange(idx, inp.value); });
+          inp.addEventListener('keydown', function(e){ if (e.key === 'Enter'){ inp.blur(); } });
+        }
+      })(inputs[i], i);
+    }
+  }
+  
+  /* Wrap key functions to trigger updates efficiently */
+  var _origRenderCart = window.renderCart;
+  window.renderCart = function(){
+    var r = _origRenderCart.apply(this, arguments);
+    scheduleUpdate('qtyInputs');
+    return r;
+  };
+  
+  var _origApplyUserSettings = window.applyUserSettings;
+  window.applyUserSettings = function(user){
+    var r = _origApplyUserSettings.apply(this, arguments);
+    scheduleUpdate('header');
+    scheduleUpdate('distributorOptions');
+    scheduleUpdate('profileStats');
+    return r;
+  };
+  
+  var _origSaveBill = window.saveBill;
+  window.saveBill = async function(){
+    var r = await _origSaveBill.apply(this, arguments);
+    scheduleUpdate('profileStats');
+    return r;
+  };
+  
+  /* ===== FIX 3: Prevent emoji flash - Hide login overlay immediately if user is logged in ===== */
+  
+  /* Run this BEFORE any DOM content loads */
+  (function preventFlash(){
+    try {
+      var saved = localStorage.getItem('currentUser');
+      if (saved){
+        var user = JSON.parse(saved);
+        if (user && user.username){
+          /* Inject critical CSS to hide login overlay instantly */
+          var style = document.createElement('style');
+          style.id = 'prevent-flash-css';
+          style.textContent = '#login-overlay{display:none!important;} .header h2::before,.header h2::after{content:""!important;}';
+          document.head.appendChild(style);
+          
+          /* Pre-render the correct header text without waiting for JS */
+          var shopName = (user.shop_name || 'SK AAYURVEDA').toUpperCase();
+          var subTitle = (user.subtitle || 'KEVA SUPER STOCK POINT').toUpperCase();
+          
+          /* Store for immediate use */
+          window.__preloadedUser = user;
+          window.__preloadedShop = shopName;
+          window.__preloadedSub = subTitle;
+        }
+      }
+    } catch(e){}
+  })();
+  
+  console.log('✅ V50 Loaded: Persistent login + Optimized performance + No flash');
+})();
+
+/* ==== V51: ADMIN can enter EITHER Stockist ID or Distributor ID ==== */
+(function(){
+  function patch(){
+    if (window.updatePriceDisplay && !window.updatePriceDisplay.__skaAdminDist){
+      var _orig = window.updatePriceDisplay;
+      window.updatePriceDisplay = function(){
+        _orig.apply(this, arguments);
+        var u = curUser();
+        if (u && u.user_type === 'admin'){
+          var si = document.getElementById('stockist-id');
+          var bpEl = document.getElementById('show-bp');
+          var spEl = document.getElementById('show-sp');
+          if (si){
+            /* Label changes based on which checkboxes are ticked */
+            if (bpEl && bpEl.checked && (!spEl || !spEl.checked)){
+              /* MRP + BP only → distributor mode */
+              si.disabled = false; si.readOnly = false; si.removeAttribute('disabled');
+              si.placeholder = '🏪 Distributor ID';
+            } else {
+              /* All three or partial → generic label */
+              si.disabled = false; si.readOnly = false; si.removeAttribute('disabled');
+              si.placeholder = '🏪 Stockist / Distributor ID';
+            }
+            /* Update visible label text */
+            var lbl = document.querySelector('label[for="stockist-id"]');
+            if (!lbl && si.parentElement) lbl = si.parentElement.querySelector('label');
+            if (lbl){
+              var newTxt = (bpEl && bpEl.checked && (!spEl || !spEl.checked)) ? '🏪 Distributor ID' : '🏪 Stockist / Distributor ID';
+              if (lbl.textContent.indexOf(newTxt) === -1) lbl.textContent = newTxt;
+            }
+          }
+        }
+      };
+      window.updatePriceDisplay.__skaAdminDist = true;
+    }
+  }
+  patch(); setInterval(patch, 800);
+})();
