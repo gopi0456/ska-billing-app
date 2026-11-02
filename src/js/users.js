@@ -90,3 +90,886 @@ window.parsePDF = async function(f){
   });
   return items;
 };
+
+/* ==== V34: KEVA LOGO on Share modal + View-Bill modal + PDF top ==== */
+(function(){
+  var oldc = document.getElementById('ska-logo2-css');
+  if (oldc) oldc.remove();
+  var st = document.createElement('style');
+  st.id = 'ska-logo2-css';
+  st.textContent = [
+    '.ska-modal-logo{text-align:center;margin:0 0 10px}',
+    '.ska-modal-logo img{width:66px;height:66px;object-fit:cover;border-radius:50%;border:2px solid #e0e7ff;box-shadow:0 3px 10px rgba(15,23,42,.18);background:#fff}',
+    '.view-bill-header .ska-modal-logo{margin:-2px 0 8px}',
+    '.view-bill-header .ska-modal-logo img{border-color:rgba(255,255,255,.4);box-shadow:0 3px 12px rgba(0,0,0,.35)}'
+  ].join('');
+  document.head.appendChild(st);
+
+  /* Preload logo as dataURL (needed for PDF embedding) */
+  window.__skaLogoData = null;
+  try {
+    var img = new Image();
+    img.onload = function(){
+      try {
+        var c = document.createElement('canvas');
+        c.width = img.width; c.height = img.height;
+        c.getContext('2d').drawImage(img, 0, 0);
+        window.__skaLogoData = c.toDataURL('image/png');
+      } catch(e){}
+    };
+    img.src = 'assets/keva-logo.png';
+  } catch(e){}
+
+  function logoDiv(){
+    var d = document.createElement('div');
+    d.className = 'ska-modal-logo';
+    d.innerHTML = '<img src="assets/keva-logo.png" alt="" onerror="this.parentNode.style.display=\'none\'">';
+    return d;
+  }
+
+  function patch(){
+    /* 1) Share Bill modal (History → Share) */
+    if (window.openShareModal && !window.openShareModal.__skaLogo){
+      var _o = window.openShareModal;
+      window.openShareModal = async function(){
+        await _o.apply(this, arguments);
+        var m = document.getElementById('share-modal');
+        if (m && !m.querySelector('.ska-modal-logo')){
+          var content = m.querySelector('.modal-content');
+          if (content) content.insertBefore(logoDiv(), content.children[1] || content.firstChild);
+        }
+      };
+      window.openShareModal.__skaLogo = true;
+    }
+    /* 2) View Bill modal (History → tap bill number) */
+    if (window.viewBillDetails && !window.viewBillDetails.__skaLogo){
+      var _v = window.viewBillDetails;
+      window.viewBillDetails = async function(){
+        await _v.apply(this, arguments);
+        var h = document.querySelector('.view-bill-header');
+        if (h && !h.querySelector('.ska-modal-logo')) h.insertBefore(logoDiv(), h.firstChild);
+      };
+      window.viewBillDetails.__skaLogo = true;
+    }
+    /* 3) PDF invoice: draw logo at top-left corner (no layout shift) */
+    try {
+      if (window.jspdf && window.jspdf.jsPDF && !window.jspdf.jsPDF.__skaLogo){
+        var proto = window.jspdf.jsPDF.prototype;
+        var cur = proto.text;
+        proto.text = function(txt, x, y, opts){
+          if (txt === 'SK AAYURVEDA' && window.__skaLogoData && !this.__skaLogoDone){
+            this.__skaLogoDone = true;
+            try { this.addImage(window.__skaLogoData, 'PNG', 12, 7, 16, 16); } catch(e){}
+          }
+          return cur.call(this, txt, x, y, opts);
+        };
+        window.jspdf.jsPDF.__skaLogo = true;
+      }
+    } catch(e){}
+  }
+  patch(); setInterval(patch, 800);
+})();
+
+/* ==== V35: Professional leaf (🌿) instead of religious emoji in WhatsApp/SMS text & fallbacks ==== */
+(function(){
+  /* 1) Shared message text: swap emoji in the generated bill text */
+  if (window.getBillText && !window.getBillText.__skaLeaf){
+    var _g = window.getBillText;
+    window.getBillText = function(){
+      var t = _g.apply(this, arguments);
+      return (typeof t === 'string') ? t.split('🕉️').join('🌿') : t;
+    };
+    window.getBillText.__skaLeaf = true;
+  }
+
+  /* 2) Sweep visible text headers/modals: replace any leftover 🕉️ with 🌿 */
+  function sweep(){
+    var sels = ['#share-shop-header', '.view-bill-header .company-name', '.header h2', '#login-overlay .glass-card h2', '.ska-logo'];
+    for (var s=0; s<sels.length; s++){
+      var els = document.querySelectorAll(sels[s]);
+      for (var i=0; i<els.length; i++){
+        var el = els[i];
+        if (el.children.length === 0){
+          if ((el.textContent||'').indexOf('🕉️') > -1) el.textContent = el.textContent.split('🕉️').join('🌿');
+        } else {
+          var w = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, null, false);
+          var n;
+          while ((n = w.nextNode())){
+            if (n.nodeValue && n.nodeValue.indexOf('🕉️') > -1) n.nodeValue = n.nodeValue.split('🕉️').join('🌿');
+          }
+        }
+      }
+    }
+  }
+  sweep(); setInterval(sweep, 600);
+
+  /* 3) Header builder: logo image first, 🌿 only as fallback if logo file missing */
+  window.applyHeader = function(user){
+    var shop = ((user&&user.shop_name)||'SK AAYURVEDA').toUpperCase();
+    var sub  = ((user&&user.subtitle)||'KEVA SUPER STOCK POINT').toUpperCase();
+    var logo = '<span class="ska-logo"><img src="assets/keva-logo.png" alt="" onerror="this.outerHTML=\'🌿\'"></span>';
+    var h2 = document.querySelector('.header h2');
+    if (h2){
+      h2.innerHTML = logo + '<span>' + shop + '</span>';
+      h2.style.color = '#f1c40f'; h2.style.fontWeight = '800';
+      h2.style.textShadow = '0 2px 4px rgba(0,0,0,0.45)'; h2.style.letterSpacing = '1px';
+    }
+    var subEl = document.querySelector('.header .subtitle');
+    if (subEl){ subEl.textContent = sub; subEl.style.color = '#ecf0f1'; subEl.style.fontWeight = '600'; subEl.style.letterSpacing = '2px'; }
+    var lh = document.querySelector('#login-overlay .glass-card h2');
+    if (lh){ lh.innerHTML = logo + '<span>' + shop + '</span>'; lh.style.color = '#fff'; }
+    var lp2 = document.querySelector('#login-overlay .glass-card p');
+    if (lp2){ lp2.textContent = sub; }
+  };
+
+  console.log('✅ V35 Loaded: professional leaf branding in shares');
+})();
+
+/* ==== V36: BRANDING ON BOTH SIDES OF SHOP NAME ==== */
+(function(){
+  var css = document.getElementById('ska-both-css');
+  if (css) css.remove();
+  var st = document.createElement('style');
+  st.id = 'ska-both-css';
+  st.textContent = [
+    '.ska-logo-sm{width:26px;height:26px;border-radius:50%;object-fit:cover;vertical-align:middle;margin:0 8px;border:1.5px solid rgba(255,255,255,.35);background:#16213e;box-shadow:0 1px 4px rgba(0,0,0,.3)}',
+    '#share-shop-header .ska-logo-sm{border-color:#e0e7ff;background:#fff;box-shadow:0 1px 4px rgba(15,23,42,.15)}',
+    '.view-bill-header .ska-logo-sm{border-color:rgba(255,255,255,.4)}',
+    '.header h2 span{flex:0 1 auto;min-width:0}'
+  ].join('');
+  document.head.appendChild(st);
+
+  function logoBig(){ return '<span class="ska-logo"><img src="assets/keva-logo.png" alt="" onerror="this.outerHTML=\'🌿\'"></span>'; }
+  function logoSm(){ return '<img class="ska-logo-sm" src="assets/keva-logo.png" alt="" onerror="this.outerHTML=\'🌿\'">'; }
+
+  /* 1) Header + Login: logo on BOTH sides */
+  window.applyHeader = function(user){
+    var shop = ((user&&user.shop_name)||'SK AAYURVEDA').toUpperCase();
+    var sub  = ((user&&user.subtitle)||'KEVA SUPER STOCK POINT').toUpperCase();
+    var h2 = document.querySelector('.header h2');
+    if (h2){
+      h2.innerHTML = logoBig() + '<span>' + shop + '</span>' + logoBig();
+      h2.style.color = '#f1c40f'; h2.style.fontWeight = '800';
+      h2.style.textShadow = '0 2px 4px rgba(0,0,0,0.45)'; h2.style.letterSpacing = '1px';
+    }
+    var subEl = document.querySelector('.header .subtitle');
+    if (subEl){ subEl.textContent = sub; subEl.style.color = '#ecf0f1'; subEl.style.fontWeight = '600'; subEl.style.letterSpacing = '2px'; }
+    var lh = document.querySelector('#login-overlay .glass-card h2');
+    if (lh){ lh.innerHTML = logoBig() + '<span>' + shop + '</span>' + logoBig(); lh.style.color = '#fff'; }
+    var lp2 = document.querySelector('#login-overlay .glass-card p');
+    if (lp2){ lp2.textContent = sub; }
+  };
+
+  /* 2) WhatsApp / SMS text: leaf on BOTH sides of shop name */
+  if (window.getBillText && !window.getBillText.__skaBoth){
+    var _g = window.getBillText;
+    window.getBillText = function(){
+      var t = _g.apply(this, arguments);
+      if (typeof t === 'string'){
+        t = t.replace(/^🌿 (\*[^\n]*\*)$/m, '🌿 $1 🌿');
+      }
+      return t;
+    };
+    window.getBillText.__skaBoth = true;
+  }
+
+  /* 3) PDF: logo in TOP-RIGHT corner too (left already exists) */
+  try {
+    if (window.jspdf && window.jspdf.jsPDF && !window.jspdf.jsPDF.__skaLogoRight){
+      var proto = window.jspdf.jsPDF.prototype;
+      var cur = proto.text;
+      proto.text = function(txt, x, y, opts){
+        if (txt === 'SK AAYURVEDA' && window.__skaLogoData && !this.__skaLogoRightDone){
+          this.__skaLogoRightDone = true;
+          try { this.addImage(window.__skaLogoData, 'PNG', 182, 7, 16, 16); } catch(e){}
+        }
+        return cur.call(this, txt, x, y, opts);
+      };
+      window.jspdf.jsPDF.__skaLogoRight = true;
+    }
+  } catch(e){}
+
+  /* 4) Share modal + View-Bill modal: small logos flanking shop name */
+  function flank(){
+    var sh = document.getElementById('share-shop-header');
+    if (sh && !sh.getAttribute('data-flanked')){
+      var d = sh.querySelector('div');
+      if (d){
+        sh.setAttribute('data-flanked','1');
+        d.innerHTML = logoSm() + d.innerHTML.replace(/^🌿\s*/, '') + logoSm();
+      }
+    }
+    var cn = document.querySelector('.view-bill-header .company-name');
+    if (cn && !cn.getAttribute('data-flanked')){
+      cn.setAttribute('data-flanked','1');
+      cn.innerHTML = logoSm() + ' ' + cn.textContent.replace(/^🌿\s*/, '') + ' ' + logoSm();
+    }
+  }
+  flank(); setInterval(flank, 700);
+
+  console.log('✅ V36 Loaded: branding on both sides');
+})();
+
+/* ==== V37: 🌿 both sides of shop name in Share modal + Login logo-on-top layout ==== */
+(function(){
+  function logoBig(){ return '<span class="ska-logo"><img src="assets/keva-logo.png" alt="" onerror="this.outerHTML=\'🌿\'"></span>'; }
+
+  /* 1) Share Bill modal: keep top logo, shop name becomes 🌿 NAME 🌿 */
+  if (window.openShareModal && !window.openShareModal.__skaLeafBoth){
+    var _o = window.openShareModal;
+    window.openShareModal = async function(){
+      await _o.apply(this, arguments);
+      var sh = document.getElementById('share-shop-header');
+      if (sh){
+        sh.setAttribute('data-flanked','1');   /* stops the old logo-flank interval for this header */
+        var d = sh.querySelector('div');
+        if (d){
+          var name = (d.textContent||'').replace(/🕉️|🌿/g,'').trim();
+          d.innerHTML = '🌿 ' + name + ' 🌿';
+        }
+      }
+    };
+    window.openShareModal.__skaLeafBoth = true;
+  }
+
+  /* 2) Header + Login: header keeps logos both sides; login gets logo TOP + leaves both sides */
+  window.applyHeader = function(user){
+    var shop = ((user&&user.shop_name)||'SK AAYURVEDA').toUpperCase();
+    var sub  = ((user&&user.subtitle)||'KEVA SUPER STOCK POINT').toUpperCase();
+    var h2 = document.querySelector('.header h2');
+    if (h2){
+      h2.innerHTML = logoBig() + '<span>' + shop + '</span>' + logoBig();
+      h2.style.color = '#f1c40f'; h2.style.fontWeight = '800';
+      h2.style.textShadow = '0 2px 4px rgba(0,0,0,0.45)'; h2.style.letterSpacing = '1px';
+    }
+    var subEl = document.querySelector('.header .subtitle');
+    if (subEl){ subEl.textContent = sub; subEl.style.color = '#ecf0f1'; subEl.style.fontWeight = '600'; subEl.style.letterSpacing = '2px'; }
+    var lh = document.querySelector('#login-overlay .glass-card h2');
+    if (lh){
+      lh.style.display = 'flex';
+      lh.style.flexDirection = 'column';
+      lh.style.alignItems = 'center';
+      lh.style.gap = '6px';
+      lh.innerHTML = '<div style="display:flex;justify-content:center;">' + logoBig() + '</div>' +
+                     '<div style="color:#fff;">🌿 ' + shop + ' 🌿</div>';
+    }
+    var lp2 = document.querySelector('#login-overlay .glass-card p');
+    if (lp2){ lp2.textContent = sub; }
+  };
+
+  console.log('✅ V37 Loaded: share leaves + login logo layout');
+})();
+
+/* ==== V38: FINAL BRANDING — header: 1 logo + leaves; login: logo top + leaves; all lines: leaves both sides ==== */
+(function(){
+  function logoBig(){ return '<span class="ska-logo"><img src="assets/keva-logo.png" alt="" onerror="this.outerHTML=\'🌿\'"></span>'; }
+
+  /* Login page branding — runs BEFORE login too */
+  function brandLogin(){
+    var lh = document.querySelector('#login-overlay .glass-card h2');
+    if (lh && !lh.getAttribute('data-branded')){
+      lh.setAttribute('data-branded','1');
+      lh.style.display='flex'; lh.style.flexDirection='column'; lh.style.alignItems='center'; lh.style.gap='6px';
+      var name = (lh.textContent||'').replace(/🕉️|/g,'').trim() || 'SK AAYURVEDA';
+      lh.innerHTML = '<div style="display:flex;justify-content:center;">' + logoBig() + '</div>' +
+                     '<div style="color:#fff;">🌿 ' + name + ' 🌿</div>';
+    }
+  }
+
+  /* Header + login after user login */
+  window.applyHeader = function(user){
+    var shop = ((user&&user.shop_name)||'SK AAYURVEDA').toUpperCase();
+    var sub  = ((user&&user.subtitle)||'KEVA SUPER STOCK POINT').toUpperCase();
+    var h2 = document.querySelector('.header h2');
+    if (h2){
+      /* ONE logo at start + leaves both sides of shop name */
+      h2.innerHTML = logoBig() + '<span>🌿 ' + shop + ' 🌿</span>';
+      h2.style.color = '#f1c40f'; h2.style.fontWeight = '800';
+      h2.style.textShadow = '0 2px 4px rgba(0,0,0,0.45)'; h2.style.letterSpacing = '1px';
+    }
+    var subEl = document.querySelector('.header .subtitle');
+    if (subEl){ subEl.textContent = sub; subEl.style.color = '#ecf0f1'; subEl.style.fontWeight = '600'; subEl.style.letterSpacing = '2px'; }
+    var lh = document.querySelector('#login-overlay .glass-card h2');
+    if (lh){
+      lh.style.display='flex'; lh.style.flexDirection='column'; lh.style.alignItems='center'; lh.style.gap='6px';
+      lh.innerHTML = '<div style="display:flex;justify-content:center;">' + logoBig() + '</div>' +
+                     '<div style="color:#fff;">🌿 ' + shop + ' 🌿</div>';
+    }
+    var lp2 = document.querySelector('#login-overlay .glass-card p');
+    if (lp2){ lp2.textContent = sub; }
+  };
+
+  /* View-Bill company line: leaves both sides (remove the two small logos) */
+  function leafSweep(){
+    var cn = document.querySelector('.view-bill-header .company-name');
+    if (cn){
+      cn.setAttribute('data-flanked','1');   /* stops old logo-flank interval */
+      var txt = (cn.textContent||'').replace(/🕉️|🌿/g,'').trim();
+      if (cn.querySelector('img') || txt.indexOf('🌿') === -1){
+        cn.innerHTML = '🌿 ' + txt + ' 🌿';
+      }
+    }
+    brandLogin();
+  }
+  leafSweep(); setInterval(leafSweep, 800);
+  brandLogin();
+
+  console.log('✅ V38 Loaded: final branding layout');
+})();
+
+/* ==== V39: Login leaves fix + fixed logo sizes + PDF logo guaranteed ==== */
+(function(){
+  /* 1) Login header: exactly ONE leaf each side, clean name, fixed-size logo */
+  function fixLogin(){
+    var lh = document.querySelector('#login-overlay .glass-card h2');
+    if (!lh || lh.getAttribute('data-v39')) return;
+    lh.setAttribute('data-v39','1');
+    var raw = (lh.textContent||'').replace(/🕉️|/g,'').replace(/\s+/g,' ').trim() || 'SK AAYURVEDA';
+    lh.style.display='flex'; lh.style.flexDirection='column'; lh.style.alignItems='center'; lh.style.gap='6px';
+    lh.innerHTML = '<div class="ska-login-logo"><img src="assets/keva-logo.png" alt="" onerror="this.outerHTML=\'🌿\'"></div>' +
+                   '<div style="color:#fff;">🌿 ' + raw + ' 🌿</div>';
+  }
+  fixLogin(); setInterval(fixLogin, 900);
+
+  /* 2) Fixed logo sizes: login 52px circle, header 34px */
+  var css = document.getElementById('ska-v39-css');
+  if (css) css.remove();
+  var st = document.createElement('style');
+  st.id = 'ska-v39-css';
+  st.textContent = [
+    '.ska-login-logo{width:52px;height:52px;border-radius:50%;overflow:hidden;border:2px solid rgba(255,255,255,.35);box-shadow:0 3px 10px rgba(0,0,0,.4);background:#16213e;display:flex;align-items:center;justify-content:center;flex:0 0 auto}',
+    '.ska-login-logo img{width:100%;height:100%;object-fit:cover;border-radius:50%}',
+    '.header .ska-logo{width:34px!important;height:34px!important}'
+  ].join('');
+  document.head.appendChild(st);
+
+  /* 3) Robust logo loader (multiple paths) for PDF embedding */
+  function tryLoad(paths, i){
+    if (i >= paths.length) return;
+    var img = new Image();
+    img.onload = function(){
+      try {
+        var c = document.createElement('canvas');
+        c.width = img.width; c.height = img.height;
+        c.getContext('2d').drawImage(img, 0, 0);
+        window.__skaLogoData = c.toDataURL('image/png');
+      } catch(e){}
+    };
+    img.onerror = function(){ tryLoad(paths, i+1); };
+    img.src = paths[i];
+  }
+  if (!window.__skaLogoData) tryLoad(['assets/keva-logo.png','keva-logo.png','./assets/keva-logo.png','/assets/keva-logo.png'], 0);
+
+  /* 4) PDF: if logo image missing, draw green KEVA badge in both top corners */
+  try {
+    if (window.jspdf && window.jspdf.jsPDF && !window.jspdf.jsPDF.__skaPdfBadge){
+      var proto = window.jspdf.jsPDF.prototype;
+      var cur = proto.text;
+      proto.text = function(txt, x, y, opts){
+        if (txt === 'SK AAYURVEDA' && !this.__skaBadgeDone){
+          this.__skaBadgeDone = true;
+          if (!window.__skaLogoData){
+            try {
+              this.setFillColor(22,120,44);
+              this.circle(20, 15, 8, 'F');
+              this.circle(190, 15, 8, 'F');
+              this.setTextColor(255,255,255);
+              this.setFont(undefined,'bold');
+              cur.call(this, 'KEVA', 20, 16, {align:'center'});
+              cur.call(this, 'KEVA', 190, 16, {align:'center'});
+              this.setTextColor(0,0,0);
+              this.setFont(undefined,'normal');
+            } catch(e){}
+          }
+        }
+        return cur.call(this, txt, x, y, opts);
+      };
+      window.jspdf.jsPDF.__skaPdfBadge = true;
+    }
+  } catch(e){}
+
+  console.log('✅ V39 Loaded: login fix + logo sizes + PDF badge');
+})();
+
+/* ==== V40: Exact 2 leaves + big logo + fully dynamic PDF (instance-level patch) ==== */
+(function(){
+  /* Emoji-safe cleaner (unicode escapes — cannot corrupt) */
+  var EMOJI = /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}]/gu;
+  function cleanName(t){ return String(t||'').replace(EMOJI,'').replace(/\s+/g,' ').trim(); }
+  var LEAF = '\u{1F33F}';
+  var LOGO_LOGIN = '<span class="ska-login-logo"><img src="assets/keva-logo.png" alt="" onerror="this.outerHTML=\'&#127807;\'"></span>';
+  var LOGO_HEAD  = '<span class="ska-logo"><img src="assets/keva-logo.png" alt="" onerror="this.outerHTML=\'&#127807;\'"></span>';
+
+  /* Bigger login logo + correct header logo sizes */
+  var css = document.getElementById('ska-v40-css');
+  if (css) css.remove();
+  var st = document.createElement('style');
+  st.id = 'ska-v40-css';
+  st.textContent = [
+    '.ska-login-logo{width:76px;height:76px;border-radius:50%;overflow:hidden;border:2px solid rgba(255,255,255,.4);box-shadow:0 4px 14px rgba(0,0,0,.45);background:#16213e;display:flex;align-items:center;justify-content:center;flex:0 0 auto}',
+    '.ska-login-logo img{width:100%;height:100%;object-fit:cover;border-radius:50%}',
+    '.header .ska-logo{width:40px!important;height:40px!important}'
+  ].join('');
+  document.head.appendChild(st);
+
+  /* Login: ONE leaf each side, big logo on top; disable all old login builders */
+  function buildLogin(){
+    var lh = document.querySelector('#login-overlay .glass-card h2');
+    if (!lh || lh.getAttribute('data-v40')) return;
+    lh.setAttribute('data-v40','1');
+    lh.setAttribute('data-v39','1');      /* stops v39 fixLogin interval */
+    lh.setAttribute('data-branded','1');  /* stops v38 brandLogin interval */
+    var name = cleanName(lh.textContent) || 'SK AAYURVEDA';
+    lh.style.display='flex'; lh.style.flexDirection='column'; lh.style.alignItems='center'; lh.style.gap='8px';
+    lh.innerHTML = LOGO_LOGIN + '<div style="color:#fff;">' + LEAF + ' ' + name + ' ' + LEAF + '</div>';
+  }
+  buildLogin(); setInterval(buildLogin, 1000);
+
+  /* Header + login branding (single source) */
+  window.applyHeader = function(user){
+    var shop = ((user&&user.shop_name)||'SK AAYURVEDA').toUpperCase();
+    var sub  = ((user&&user.subtitle)||'KEVA SUPER STOCK POINT').toUpperCase();
+    var h2 = document.querySelector('.header h2');
+    if (h2){
+      h2.innerHTML = LOGO_HEAD + '<span>' + LEAF + ' ' + shop + ' ' + LEAF + '</span>';
+      h2.style.color='#f1c40f'; h2.style.fontWeight='800';
+      h2.style.textShadow='0 2px 4px rgba(0,0,0,0.45)'; h2.style.letterSpacing='1px';
+    }
+    var subEl = document.querySelector('.header .subtitle');
+    if (subEl){ subEl.textContent=sub; subEl.style.color='#ecf0f1'; subEl.style.fontWeight='600'; subEl.style.letterSpacing='2px'; }
+    buildLogin();
+  };
+
+  /* PDF: instance-level patch — dynamic names + logo/badge + leaves + labels */
+  function patchJsPdfInstance(){
+    if (!window.jspdf || !window.jspdf.jsPDF || window.jspdf.jsPDF.__skaInstancePatched) return;
+    var Orig = window.jspdf.jsPDF;
+    var Patched = function(opts){
+      var d = new Orig(opts);
+      try {
+        var _t = d.text.bind(d);
+        d.text = function(txt, x, y, o){
+          var u = curUser();
+          if (typeof txt === 'string'){
+            if (txt === 'SK AAYURVEDA'){
+              var title = (u && u.shop_name) ? String(u.shop_name).toUpperCase() : txt;
+              if (window.__skaLogoData){
+                try { d.addImage(window.__skaLogoData,'PNG',12,7,16,16); d.addImage(window.__skaLogoData,'PNG',182,7,16,16); } catch(e){}
+              } else {
+                try {
+                  d.setFillColor(22,120,44); d.circle(20,15,8,'F'); d.circle(190,15,8,'F');
+                  d.setTextColor(255,255,255); d.setFont(undefined,'bold');
+                  _t('KEVA',20,16,{align:'center'}); _t('KEVA',190,16,{align:'center'});
+                  d.setTextColor(0,0,0); d.setFont(undefined,'normal');
+                } catch(e){}
+              }
+              try {
+                d.setFillColor(34,139,34);
+                var w = d.getTextWidth(title);
+                d.ellipse(105 - w/2 - 5, (y||18) - 1.5, 2.2, 3.2, 'F');
+                d.ellipse(105 + w/2 + 5, (y||18) - 1.5, 2.2, 3.2, 'F');
+                d.setFillColor(0,0,0);
+              } catch(e){}
+              return _t(title, x, y, o);
+            }
+            if (txt === 'KEVA SUPER STOCK POINT'){
+              return _t((u && u.subtitle) ? String(u.subtitle).toUpperCase() : txt, x, y, o);
+            }
+            if (txt.indexOf('Stockist ID:') === 0){
+              try { if (typeof csbill !== 'undefined' && csbill && csbill.customer_type === 'distributor') txt = 'Distributor ID:' + txt.substring(12); } catch(e){}
+            }
+            if (txt === 'Thank you for your business!'){
+              try { if (typeof csbill !== 'undefined' && csbill && csbill.comments){ _t('Note: ' + String(csbill.comments).substring(0,90), 105, (y||0)-6, {align:'center'}); } } catch(e){}
+            }
+          }
+          return _t(txt, x, y, o);
+        };
+      } catch(e){}
+      return d;
+    };
+    Patched.prototype = Orig.prototype;
+    Patched.API = Orig.API;
+    Patched.__skaInstancePatched = true;
+    window.jspdf.jsPDF = Patched;
+  }
+  patchJsPdfInstance(); setInterval(patchJsPdfInstance, 800);
+
+  console.log('✅ V40 Loaded: 2 leaves, big logo, dynamic PDF');
+})();
+
+/* ==== V42: REAL VECTOR LEAVES (pointed leaf + veins) both sides of shop name in PDF ==== */
+(function(){
+  /* Draw a sharp leaf: pointed tips, midrib, side veins (pure vector) */
+  function drawLeaf(d, x, yBase){
+    try {
+      /* leaf body: two bezier edges meeting at sharp tips */
+      d.setFillColor(46,139,87);
+      d.setDrawColor(46,139,87);
+      d.setLineWidth(0.2);
+      d.lines([
+        [-2.6,-2, -2.6,-6, 0,-8],   /* left edge: bottom tip -> top tip */
+        [ 2.6, 2,  2.6, 6, 0, 8]    /* right edge: top tip -> bottom tip */
+      ], x, yBase, [1,1], 'F', true);
+      /* midrib */
+      d.setDrawColor(20,80,40);
+      d.setLineWidth(0.3);
+      d.line(x, yBase-1.0, x, yBase-7.0);
+      /* side veins */
+      d.setLineWidth(0.2);
+      d.line(x, yBase-2.6, x-1.5, yBase-3.9);
+      d.line(x, yBase-2.6, x+1.5, yBase-3.9);
+      d.line(x, yBase-4.6, x-1.3, yBase-5.9);
+      d.line(x, yBase-4.6, x+1.3, yBase-5.9);
+      /* reset */
+      d.setDrawColor(0,0,0);
+      d.setFillColor(0,0,0);
+      d.setLineWidth(0.2);
+    } catch(e){}
+  }
+
+  function patchPdf42(){
+    if (!window.jspdf || !window.jspdf.jsPDF) return;
+    if (window.jspdf.jsPDF.__skaV42) return;
+    var Prev = window.jspdf.jsPDF;
+    var P42 = function(opts){
+      var d = new Prev(opts);
+      try {
+        var base41 = d.text.bind(d);
+        d.text = function(txt, x, y, o){
+          if (txt === 'SK AAYURVEDA'){
+            var u = curUser();
+            var title = (u && u.shop_name) ? String(u.shop_name).toUpperCase() : txt;
+            /* suppress the old canvas-leaf (blob) drawing inside v41 layer */
+            var savedLeaf = window.__skaLeafData;
+            window.__skaLeafData = null;
+            var res;
+            try { res = base41(txt, x, y, o); } finally { window.__skaLeafData = savedLeaf; }
+            /* draw crisp vector leaves both sides of the title */
+            try {
+              var w = d.getTextWidth(title);
+              var yb = (typeof y === 'number') ? y : 18;
+              drawLeaf(d, 105 - w/2 - 6, yb + 1);
+              drawLeaf(d, 105 + w/2 + 6, yb + 1);
+            } catch(e){}
+            return res;
+          }
+          return base41(txt, x, y, o);
+        };
+      } catch(e){}
+      return d;
+    };
+    P42.prototype = Prev.prototype;
+    P42.API = Prev.API;
+    /* freeze ALL old patch timers so nothing re-wraps */
+    P42.__skaV42 = true;
+    P42.__skaV41 = true;
+    P42.__skaInstancePatched = true;
+    P42.__skaPdfBadge = true;
+    P42.__skaTextPatched = true;
+    P42.__skaCommentText = true;
+    P42.__skaLogo = true;
+    P42.__skaLogoRight = true;
+    window.jspdf.jsPDF = P42;
+  }
+  patchPdf42(); setInterval(patchPdf42, 800);
+
+  console.log('✅ V42 Loaded: vector leaves in PDF');
+})();
+
+/* ==== V43: PDF = LOGO TOP-CENTER ONLY (no leaves) ==== */
+(function(){
+  function patchPdf43(){
+    if (!window.jspdf || !window.jspdf.jsPDF) return;
+    if (window.jspdf.jsPDF.__skaV43) return;
+    var Prev = window.jspdf.jsPDF;
+    var P43 = function(opts){
+      var d = new Prev(opts);
+      try {
+        /* suppress old corner-logo / badge prototype hooks for this instance */
+        d.__skaLogoDone = true;
+        d.__skaLogoRightDone = true;
+        d.__skaBadgeDone = true;
+        /* base = original prototype chain (rename + note hooks), bypassing v41/v42 leaf layers */
+        var base = Prev.prototype.text.bind(d);
+        d.text = function(txt, x, y, o){
+          if (typeof txt === 'string'){
+            if (txt === 'SK AAYURVEDA'){
+              var u = curUser();
+              var title = (u && u.shop_name) ? String(u.shop_name).toUpperCase() : txt;
+              /* ONLY the logo at top-center (badge fallback if image missing) */
+              if (window.__skaLogoData){
+                try { d.addImage(window.__skaLogoData, 'PNG', 98, 2, 14, 14); } catch(e){}
+              } else {
+                try {
+                  d.setFillColor(22,120,44); d.circle(105, 9, 7, 'F');
+                  d.setTextColor(255,255,255); d.setFont(undefined,'bold');
+                  base('KEVA', 105, 10.5, {align:'center'});
+                  d.setTextColor(0,0,0); d.setFont(undefined,'normal');
+                } catch(e){}
+              }
+              /* NO leaves drawn here anymore */
+              return base(title, x, y, o);
+            }
+            if (txt === 'KEVA SUPER STOCK POINT'){
+              var u2 = curUser();
+              return base((u2 && u2.subtitle) ? String(u2.subtitle).toUpperCase() : txt, x, y, o);
+            }
+            if (txt.indexOf('Stockist ID:') === 0){
+              try { if (typeof csbill !== 'undefined' && csbill && csbill.customer_type === 'distributor') txt = 'Distributor ID:' + txt.substring(12); } catch(e){}
+            }
+          }
+          return base(txt, x, y, o);
+        };
+      } catch(e){}
+      return d;
+    };
+    P43.prototype = Prev.prototype;
+    P43.API = Prev.API;
+    /* freeze every older patch timer */
+    P43.__skaV43 = true;
+    P43.__skaV42 = true;
+    P43.__skaV41 = true;
+    P43.__skaInstancePatched = true;
+    P43.__skaPdfBadge = true;
+    P43.__skaTextPatched = true;
+    P43.__skaCommentText = true;
+    P43.__skaLogo = true;
+    P43.__skaLogoRight = true;
+    window.jspdf.jsPDF = P43;
+  }
+  patchPdf43(); setInterval(patchPdf43, 800);
+  console.log('✅ V43 Loaded: PDF logo-only header');
+})();
+
+/* ==== V44: SAFE PDF — remove stale wrappers, logo top-center only, never throws ==== */
+(function(){
+  function patchPdf44(){
+    if (!window.jspdf || !window.jspdf.jsPDF) return;
+    if (window.jspdf.jsPDF.__skaV44) return;
+    var Prev = window.jspdf.jsPDF;
+    var P44 = function(opts){
+      var d = new Prev(opts);
+      try {
+        /* 1) Drop any stale per-instance text wrappers from v40–v43 */
+        try { delete d.text; } catch(e){ d.text = undefined; }
+
+        /* 2) Instance flags: suppress old corner-logo / badge prototype hooks */
+        d.__skaLogoDone = true;
+        d.__skaLogoRightDone = true;
+        d.__skaBadgeDone = true;
+
+        /* 3) Safe bind to prototype chain (the path that worked before) */
+        var pt = null, p = d;
+        while (p && typeof p.text !== 'function') p = Object.getPrototypeOf(p);
+        if (p) pt = p.text.bind(d);
+        if (!pt) return d;   /* nothing safe to wrap → leave untouched */
+        d.__skaProtoText = pt;
+
+        /* 4) Clean decorator: dynamic names + ONE top-center logo, NO leaves */
+        d.text = function(txt, x, y, o){
+          var pt2 = d.__skaProtoText;
+          if (typeof txt === 'string'){
+            if (txt === 'SK AAYURVEDA'){
+              var u = curUser();
+              var title = (u && u.shop_name) ? String(u.shop_name).toUpperCase() : txt;
+              if (window.__skaLogoData && typeof d.addImage === 'function'){
+                try { d.addImage(window.__skaLogoData, 'PNG', 98, 2, 14, 14); } catch(e){}
+              }
+              try { return pt2(title, x, y, o); }
+              catch(e){ try { return pt2(txt, x, y, o); } catch(e2){ return undefined; } }
+            }
+            if (txt === 'KEVA SUPER STOCK POINT'){
+              var u2 = curUser();
+              var sub = (u2 && u2.subtitle) ? String(u2.subtitle).toUpperCase() : txt;
+              try { return pt2(sub, x, y, o); }
+              catch(e){ try { return pt2(txt, x, y, o); } catch(e2){ return undefined; } }
+            }
+            if (txt.indexOf('Stockist ID:') === 0){
+              try { if (typeof csbill !== 'undefined' && csbill && csbill.customer_type === 'distributor') txt = 'Distributor ID:' + txt.substring(12); } catch(e){}
+            }
+          }
+          try { return pt2(txt, x, y, o); }
+          catch(e){ return undefined; }
+        };
+      } catch(e){}
+      return d;
+    };
+    P44.prototype = Prev.prototype;
+    P44.API = Prev.API;
+    /* freeze every older patch timer */
+    P44.__skaV44 = true;
+    P44.__skaV43 = true;
+    P44.__skaV42 = true;
+    P44.__skaV41 = true;
+    P44.__skaInstancePatched = true;
+    P44.__skaPdfBadge = true;
+    P44.__skaTextPatched = true;
+    P44.__skaCommentText = true;
+    P44.__skaLogo = true;
+    P44.__skaLogoRight = true;
+    window.jspdf.jsPDF = P44;
+  }
+  patchPdf44(); setInterval(patchPdf44, 800);
+  console.log('✅ V44 Loaded: safe PDF (logo only, no leaves, no crashes)');
+})();
+
+/* ==== V45: COLLAPSE wrapper stack -> ONE safe layer over the ORIGINAL jsPDF ==== */
+(function(){
+  function install(){
+    if (!window.jspdf || !window.jspdf.jsPDF) return;
+    if (window.jspdf.jsPDF.__skaV45) return;
+    var Cur = window.jspdf.jsPDF;
+    /* Recover the TRUE original jsPDF class via prototype.constructor */
+    var O = (Cur.prototype && Cur.prototype.constructor) ? Cur.prototype.constructor : Cur;
+    if (!O || typeof O !== 'function') O = Cur;
+
+    var P = function(opts){
+      var d = null;
+      try { d = new O(opts); } catch(e){ try { d = new Cur(opts); } catch(e2){ return null; } }
+      if (!d) return d;
+      try {
+        /* suppress old corner-logo / badge prototype hooks on this instance */
+        d.__skaLogoDone = true;
+        d.__skaLogoRightDone = true;
+        d.__skaBadgeDone = true;
+
+        /* bind the prototype text chain once (rename + note hooks live there) */
+        var pt = null, p = d;
+        while (p && typeof p.text !== 'function') p = Object.getPrototypeOf(p);
+        if (!p) return d;
+        pt = p.text.bind(d);
+        d.__skaPT = pt;
+
+        /* single clean decorator: dynamic names + top-center logo, NO leaves */
+        d.text = function(txt, x, y, o){
+          var fn = d.__skaPT;
+          try {
+            if (txt === 'SK AAYURVEDA'){
+              var u = curUser();
+              var title = (u && u.shop_name) ? String(u.shop_name).toUpperCase() : txt;
+              if (window.__skaLogoData && typeof d.addImage === 'function'){
+                try { d.addImage(window.__skaLogoData, 'PNG', 98, 2, 14, 14); } catch(e){}
+              }
+              return fn(title, x, y, o);
+            }
+            if (txt === 'KEVA SUPER STOCK POINT'){
+              var u2 = curUser();
+              return fn((u2 && u2.subtitle) ? String(u2.subtitle).toUpperCase() : txt, x, y, o);
+            }
+            if (typeof txt === 'string' && txt.indexOf('Stockist ID:') === 0){
+              try { if (typeof csbill !== 'undefined' && csbill && csbill.customer_type === 'distributor') txt = 'Distributor ID:' + txt.substring(12); } catch(e){}
+            }
+          } catch(e){}
+          try { return fn(txt, x, y, o); } catch(e){ return undefined; }
+        };
+      } catch(e){}
+      return d;
+    };
+    P.prototype = O.prototype;
+    P.API = O.API;
+    /* freeze EVERY older patch timer forever */
+    P.__skaV45 = true;
+    P.__skaV44 = true; P.__skaV43 = true; P.__skaV42 = true; P.__skaV41 = true;
+    P.__skaInstancePatched = true; P.__skaPdfBadge = true; P.__skaTextPatched = true;
+    P.__skaCommentText = true; P.__skaLogo = true; P.__skaLogoRight = true;
+    window.jspdf.jsPDF = P;
+  }
+  install(); setInterval(install, 800);
+  console.log('✅ V45 Loaded: single-layer safe PDF');
+})();
+
+/* ==== V46: PDF header polish — logo sits ABOVE title (no overlap) + professional colours ==== */
+(function(){
+  function install(){
+    if (!window.jspdf || !window.jspdf.jsPDF) return;
+    if (window.jspdf.jsPDF.__skaV46) return;
+    var Prev = window.jspdf.jsPDF;
+    var P46 = function(opts){
+      var d = new Prev(opts);
+      try {
+        var base45 = d.text.bind(d);
+        d.text = function(txt, x, y, o){
+          if (txt === 'SK AAYURVEDA'){
+            /* 1) draw a SMALL logo (9mm) centred at the very top — clear of the title */
+            var saved = window.__skaLogoData;
+            if (saved && typeof d.addImage === 'function'){
+              try { d.addImage(saved, 'PNG', 100.5, 1.5, 9, 9); } catch(e){}
+            }
+            /* 2) suppress the old 14mm logo draw inside the v45 layer */
+            window.__skaLogoData = null;
+            /* 3) professional deep-navy for the shop name */
+            try { d.setTextColor(15, 52, 96); d.setFont(undefined, 'bold'); } catch(e){}
+            var r;
+            try { r = base45(txt, x, y, o); }
+            finally {
+              window.__skaLogoData = saved;
+              try { d.setTextColor(0,0,0); } catch(e){}
+            }
+            return r;
+          }
+          if (txt === 'KEVA SUPER STOCK POINT'){
+            /* slate-grey subtitle */
+            try { d.setTextColor(71, 85, 105); d.setFont(undefined, 'normal'); } catch(e){}
+            var r2;
+            try { r2 = base45(txt, x, y, o); }
+            finally { try { d.setTextColor(0,0,0); } catch(e){} }
+            return r2;
+          }
+          return base45(txt, x, y, o);
+        };
+      } catch(e){}
+      return d;
+    };
+    P46.prototype = Prev.prototype;
+    P46.API = Prev.API;
+    /* freeze every older patch timer */
+    P46.__skaV46 = true;
+    P46.__skaV45 = true; P46.__skaV44 = true; P46.__skaV43 = true; P46.__skaV42 = true; P46.__skaV41 = true;
+    P46.__skaInstancePatched = true; P46.__skaPdfBadge = true; P46.__skaTextPatched = true;
+    P46.__skaCommentText = true; P46.__skaLogo = true; P46.__skaLogoRight = true;
+    window.jspdf.jsPDF = P46;
+  }
+  install(); setInterval(install, 800);
+  console.log('✅ V46 Loaded: PDF header polish');
+})();
+
+/* ==== V47: RESTORE STICKY HEADER + TABS (overflow-x: clip instead of hidden) ==== */
+(function(){
+  var css = document.getElementById('ska-sticky-css');
+  if (css) css.remove();
+  var st = document.createElement('style');
+  st.id = 'ska-sticky-css';
+  st.textContent = [
+    /* clip = no horizontal scroll BUT sticky keeps working (hidden was killing it) */
+    'html,body{overflow-x:hidden!important;overflow-x:clip!important;max-width:100%!important}',
+    /* re-assert sticky positions */
+    '.header{position:sticky!important;top:0!important;left:0!important;right:0!important;z-index:100!important}',
+    '.tabs{position:sticky!important;left:0!important;right:0!important;z-index:99!important}',
+    /* keep content below the sticky bars */
+    '.container{position:relative!important;z-index:1!important}',
+    /* landscape keeps the compact static layout */
+    '@media (max-height:480px) and (orientation:landscape){',
+    '.header,.tabs{position:static!important}',
+    '}'
+  ].join('');
+  document.head.appendChild(st);
+
+  /* Sync tabs top-offset to the REAL header height (logo made it taller) */
+  function fixSticky(){
+    var h = document.querySelector('.header');
+    var t = document.querySelector('.tabs');
+    if (h && t){
+      var hh = h.offsetHeight;
+      if (hh > 0){
+        var want = hh + 'px';
+        if (t.style.top !== want) t.style.top = want;
+      }
+    }
+  }
+  fixSticky();
+  setInterval(fixSticky, 1200);
+  window.addEventListener('resize', fixSticky);
+  window.addEventListener('orientationchange', function(){ setTimeout(fixSticky, 150); });
+
+  console.log('✅ V47 Loaded: sticky header restored');
+})();
