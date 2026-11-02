@@ -1,7 +1,7 @@
 {
   "name": "ska-billing-desktop",
   "version": "1.0.0",
-  "description": "SK Aayurveda Billing Desktop Client",
+  "description": "SK Aayurveda Billing Desktop Client (Win7 Compatible)",
   "main": "main.js",
   "scripts": {
     "build:win7": "electron-builder --win portable --ia32"
@@ -13,8 +13,20 @@
   "build": {
     "appId": "org.keva.ska.billing.desktop",
     "productName": "SK Aayurveda Billing",
-    "directories": { "output": "../dist-desktop" },
-    "files": ["../www/**/*", "main.js"],
-    "win": { "target": [{ "target": "portable", "arch": ["ia32"] }] }
+    "directories": {
+      "output": "../dist-desktop"
+    },
+    "files": [
+      "main.js",
+      "../../www/**/*"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "portable",
+          "arch": ["ia32"]
+        }
+      ]
+    }
   }
 }
