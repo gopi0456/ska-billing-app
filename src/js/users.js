@@ -1392,3 +1392,48 @@ window.parsePDF = async function(f){
   }
   patch(); setInterval(patch, 800);
 })();
+
+/* ==== V52: ADMIN/STOCKIST — disable ID field for CUSTOMER type ==== */
+(function(){
+  function patch(){
+    if (window.updatePriceDisplay && !window.updatePriceDisplay.__skaCustDisable){
+      var _orig = window.updatePriceDisplay;
+      window.updatePriceDisplay = function(){
+        _orig.apply(this, arguments);
+        var u = curUser();
+        if (!u || u.user_type === 'distributor') return; /* distributor already handled separately */
+        var si = document.getElementById('stockist-id');
+        var spEl = document.getElementById('show-sp');
+        var bpEl = document.getElementById('show-bp');
+        if (!si) return;
+        var spChecked = spEl ? spEl.checked : false;
+        var bpChecked = bpEl ? bpEl.checked : false;
+        /* Customer = MRP only (no SP, no BP) → disable & clear */
+        if (!spChecked && !bpChecked){
+          si.disabled = true;
+          si.value = '';
+          si.placeholder = '🏪 ID (Disabled for Customer)';
+        } else {
+          /* Stockist (SP+BP) or Distributor (BP only) → enable */
+          si.disabled = false;
+          si.readOnly = false;
+          si.removeAttribute('disabled');
+          if (spChecked && bpChecked){
+            si.placeholder = '🏪 Stockist / Distributor ID';
+          } else if (bpChecked && !spChecked){
+            si.placeholder = '🏪 Distributor ID';
+          }
+        }
+        /* Update visible label text */
+        var lbl = document.querySelector('label[for="stockist-id"]');
+        if (!lbl && si.parentElement) lbl = si.parentElement.querySelector('label');
+        if (lbl){
+          var newTxt = (!spChecked && !bpChecked) ? '🏪 ID (Disabled)' : (spChecked && bpChecked ? '🏪 Stockist / Distributor ID' : '🏪 Distributor ID');
+          if (lbl.textContent.indexOf(newTxt) === -1) lbl.textContent = newTxt;
+        }
+      };
+      window.updatePriceDisplay.__skaCustDisable = true;
+    }
+  }
+  patch(); setInterval(patch, 800);
+})();
