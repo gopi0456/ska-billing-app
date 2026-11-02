@@ -24,9 +24,17 @@
       "target": [
         {
           "target": "portable",
-          "arch": ["ia32"]
+          "arch": [
+            "ia32"
+          ]
         }
       ]
-    }
-  }
+    },
+    "publish": null
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/gopi0456/ska-billing-app.git"
+  },
+  "author": "KaiPo Keva Team"
 }
