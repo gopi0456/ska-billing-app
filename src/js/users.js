@@ -1,4 +1,4 @@
-var ADMIN_PASS_B64 = "YWRtaW5AMTIz";
+var ADMIN_PASS_B64 = "OTUzMzk2ODk3OEA5NDk0OTM5MzY3";
 function gv(id){ var e=document.getElementById(id); return e?e.value:''; }
 function curUser(){ try{ return JSON.parse(sessionStorage.getItem('currentUser')||'null'); }catch(e){ return null; } }
 
@@ -1435,4 +1435,1396 @@ window.skaRefreshProfileStats = async function(){
     '.table-wrap::-webkit-scrollbar-thumb:hover{background:#94a3b8}'
   ].join('');
   document.head.appendChild(st);
+})();
+
+/* ==== V17: Persist and show S/P unit in History and Edit Bill ==== */
+
+/* 1. Save unit to bill_items when saving a bill */
+(function(){
+  if (window.saveBill && !window.saveBill.__skaUnit){
+    var _orig = window.saveBill;
+    window.saveBill = async function(){
+      var n = document.getElementById('cust-name').value.trim();
+      var mo = document.getElementById('cust-mobile').value.trim();
+      var uc = document.getElementById('bill-update-mobile').checked;
+      var sm = document.getElementById('show-mrp').checked;
+      var ss = document.getElementById('show-sp').checked;
+      var sb = document.getElementById('show-bp').checked;
+      var si = document.getElementById('stockist-id');
+      var u = curUser();
+      var isDistUser = !!(u && u.user_type === 'distributor');
+      var sid = '';
+      if (isDistUser){ if (sb && si && !si.disabled) sid = si.value.trim(); }
+      else if (sm && ss && sb && si && !si.disabled){ sid = si.value.trim(); }
+      if (!n || cart.length === 0) return alert('Enter customer and items');
+      if (isDistUser){ if (sb && !sid){ if (!confirm('⚠️ Distributor ID is empty.\n\nContinue?')) return; } }
+      else if (sm && ss && sb && !sid){ if (!confirm('⚠️ Stockist ID is empty.\n\nContinue?')) return; }
+      var ct = getCustomerType(sm, ss, sb);
+      var pc = [];
+      if (sm) pc.push('mrp'); if (ss) pc.push('sp'); if (sb) pc.push('bp');
+      var bn = await generateBillNumber();
+      if (!bn) return;
+      var cs = await DB.query('customers');
+      var c = findCustomer(cs, n, mo);
+      if (!c){ var cid = await DB.run('customers', {name:n, mobile:mo, customer_type:ct}); c = {id:cid, name:n, mobile:mo, customer_type:ct}; }
+      else { if (uc && mo && c.mobile !== mo){ await DB.update('customers', c.id, {mobile:mo}); c.mobile = mo; } await DB.update('customers', c.id, {customer_type:ct}); c.customer_type = ct; }
+      var tM = cart.reduce(function(s,i){ return s + i.mrp*i.qty; }, 0);
+      var tS = cart.reduce(function(s,i){ return s + i.sp*i.qty; }, 0);
+      var tB = cart.reduce(function(s,i){ return s + i.bp*i.qty; }, 0);
+      var bid = await DB.run('bills', {bill_number:bn, customer_id:c.id, cust_name:n, cust_mobile:mo, customer_type:ct, date:new Date().toISOString(), total_mrp:tM, total_sp:tS, total_bp:tB, price_columns:pc.join(','), bp_status:'pending', stockist_id:sid, bp_done_date:null, bp_done_remarks:null});
+      /* SAVE UNIT TO BILL_ITEMS */
+      for (var i=0; i<cart.length; i++){
+        var it = cart[i];
+        await DB.run('bill_items', {bill_id:bid, item_name:it.item_name, mrp:it.mrp, sp:it.sp, bp:it.bp, qty:it.qty, tot_mrp:it.mrp*it.qty, tot_sp:it.sp*it.qty, tot_bp:it.bp*it.qty, unit:it.unit||'s', baseMrp:it.baseMrp||it.mrp, baseSp:it.baseSp||it.sp, baseBp:it.baseBp||it.bp});
+      }
+      var msg = '✅ Bill Saved!\n\n🎫 Bill No: ' + bn + '\n👤 Type: ' + ct.toUpperCase() + '\n💰 BP: ' + tB.toFixed(2);
+      if (sid) msg += '\n🏪 ' + (isDistUser ? 'Distributor' : 'Stockist') + ' ID: ' + sid;
+      alert(msg);
+      cart = []; renderCart();
+      document.getElementById('cust-name').value = '';
+      document.getElementById('cust-mobile').value = '';
+      document.getElementById('stockist-id').value = '';
+      document.getElementById('customer-type-display').style.display = 'none';
+      resetUpdateMobile('bill');
+      await refreshDropdownCache();
+      if (typeof window.skaRefreshProfileStats === 'function') setTimeout(window.skaRefreshProfileStats, 300);
+    };
+    window.saveBill.__skaUnit = true;
+  }
+})();
+
+/* 2. Show unit badge in View Bill modal */
+(function(){
+  function patch(){
+    if (window.viewBillDetails && !window.viewBillDetails.__skaUnit){
+      var _orig = window.viewBillDetails;
+      window.viewBillDetails = async function(id){
+        await _orig.apply(this, arguments);
+        try {
+          var items = await DB.query('bill_items');
+          var billItems = items.filter(function(i){ return String(i.bill_id) === String(id); });
+          var table = document.querySelector('.view-bill-items table tbody');
+          if (table){
+            var rows = table.querySelectorAll('tr');
+            for (var i=0; i<rows.length; i++){
+              var item = billItems[i];
+              if (item && item.unit){
+                var nameCell = rows[i].querySelector('td:nth-child(2)');
+                if (nameCell){
+                  var unitBadge = item.unit === 'p' ? ' <span style="background:#f59e0b;color:#fff;padding:1px 6px;border-radius:8px;font-size:.7rem;font-weight:700;">P (½)</span>' : '';
+                  nameCell.innerHTML = nameCell.textContent + unitBadge;
+                }
+              }
+            }
+          }
+        } catch(e){}
+      };
+      window.viewBillDetails.__skaUnit = true;
+    }
+  }
+  patch(); setInterval(patch, 800);
+})();
+
+/* 3. Show unit selector in Edit Bill modal */
+(function(){
+  function patch(){
+    if (window.openEditModal && !window.openEditModal.__skaUnit){
+      var _orig = window.openEditModal;
+      window.openEditModal = async function(billId){
+        await _orig.apply(this, arguments);
+        try {
+          var items = await DB.query('bill_items');
+          var billItems = items.filter(function(i){ return String(i.bill_id) === String(billId); });
+          var list = document.getElementById('edit-items-list');
+          if (list){
+            var rows = list.querySelectorAll('.edit-item-row');
+            for (var i=0; i<rows.length; i++){
+              (function(row, idx){
+                var item = billItems[idx];
+                if (item && item.unit && !row.querySelector('select')){
+                  var sel = document.createElement('select');
+                  sel.style.cssText = 'width:50px;padding:4px;margin-left:8px;font-size:.8rem;';
+                  sel.innerHTML = '<option value="s">S</option><option value="p">P</option>';
+                  sel.value = item.unit;
+                  sel.onchange = function(){
+                    editingItems[idx].unit = sel.value;
+                    var mult = sel.value === 'p' ? 0.5 : 1;
+                    if (editingItems[idx].baseMrp === undefined){
+                      editingItems[idx].baseMrp = editingItems[idx].mrp / (item.unit === 'p' ? 0.5 : 1);
+                      editingItems[idx].baseSp = editingItems[idx].sp / (item.unit === 'p' ? 0.5 : 1);
+                      editingItems[idx].baseBp = editingItems[idx].bp / (item.unit === 'p' ? 0.5 : 1);
+                    }
+                    editingItems[idx].mrp = +(editingItems[idx].baseMrp * mult).toFixed(4);
+                    editingItems[idx].sp = +(editingItems[idx].baseSp * mult).toFixed(4);
+                    editingItems[idx].bp = +(editingItems[idx].baseBp * mult).toFixed(4);
+                    if (typeof renderEditItemsList === 'function') renderEditItemsList();
+                  };
+                  row.appendChild(sel);
+                }
+              })(rows[i], i);
+            }
+          }
+        } catch(e){}
+      };
+      window.openEditModal.__skaUnit = true;
+    }
+  }
+  patch(); setInterval(patch, 800);
+})();
+
+/* ==== V18: Fix P(½) duplication in View Bill ==== */
+(function(){
+  function patch(){
+    /* force-install fixed wrapper regardless of previous patch flag */
+    var _current = window.viewBillDetails;
+    if (!_current) return;
+    /* find the original (unpatched) function by walking prototype chain if needed */
+    var _orig = _current;
+    while (_orig && _orig.__skaUnit){ _orig = _orig.__skaOrig || _orig; break; }
+    
+    window.viewBillDetails = async function(id){
+      /* call whatever was installed before us */
+      await _current.apply(this, arguments);
+      try {
+        var items = await DB.query('bill_items');
+        var billItems = items.filter(function(i){ return String(i.bill_id) === String(id); });
+        var table = document.querySelector('.view-bill-items table tbody');
+        if (!table) return;
+        var rows = table.querySelectorAll('tr');
+        for (var i=0; i<rows.length; i++){
+          var item = billItems[i];
+          if (!item || !item.unit) continue;
+          var nameCell = rows[i].querySelector('td:nth-child(2)');
+          if (!nameCell) continue;
+          
+          /* FIX: skip if badge already present */
+          if (nameCell.querySelector('span[data-unit]')) continue;
+          
+          /* FIX: strip any previously-mangled "P (½)" text fragments */
+          var clean = nameCell.textContent.replace(/\s*P\s*\(½\)\s*/g, '').replace(/\s+/g,' ').trim();
+          nameCell.textContent = clean;
+          
+          if (item.unit === 'p'){
+            var badge = document.createElement('span');
+            badge.setAttribute('data-unit','p');
+            badge.style.cssText = 'background:#f59e0b;color:#fff;padding:2px 8px;border-radius:8px;font-size:.72rem;font-weight:700;margin-left:6px;white-space:nowrap;';
+            badge.textContent = 'P (½)';
+            nameCell.appendChild(badge);
+          } else if (item.unit === 's'){
+            var badge = document.createElement('span');
+            badge.setAttribute('data-unit','s');
+            badge.style.cssText = 'background:#6366f1;color:#fff;padding:2px 8px;border-radius:8px;font-size:.72rem;font-weight:700;margin-left:6px;white-space:nowrap;';
+            badge.textContent = 'S';
+            nameCell.appendChild(badge);
+          }
+        }
+      } catch(e){}
+    };
+    window.viewBillDetails.__skaUnitFix = true;
+    window.viewBillDetails.__skaOrig = _current;
+  }
+  patch(); setInterval(patch, 800);
+})();
+
+/* ==== V19-A: Comment textbox in Billing (saved with bill) ==== */
+(function(){
+  function inject(){
+    if (document.getElementById('bill-comment')) return;
+    var btn = document.querySelector('#billing button[onclick="saveBill()"]');
+    if (!btn) return;
+    var ta = document.createElement('textarea');
+    ta.id = 'bill-comment';
+    ta.placeholder = '📝 Add comment / remarks (optional) — appears on shared bill';
+    ta.style.cssText = 'width:100%;min-height:56px;padding:10px 12px;margin:10px 0 4px;border:1.5px solid #dbe3ee;border-radius:10px;background:#f8fafc;font-size:.9rem;box-sizing:border-box;';
+    btn.parentNode.insertBefore(ta, btn);
+  }
+  inject(); setInterval(inject, 1000);
+})();
+
+/* store comment into the bill record via DB.run hook */
+(function(){
+  if (window.DB && !DB.__skaComment){
+    DB.__skaComment = true;
+    var orig = DB.run.bind(DB);
+    DB.run = function(t, item){
+      try {
+        if (t === 'bills' && item && typeof item === 'object' && window.__skaBillComment){
+          item.comments = window.__skaBillComment;
+        }
+      } catch(e){}
+      return orig(t, item);
+    };
+  }
+})();
+(function(){
+  function patch(){
+    if (window.saveBill && !window.saveBill.__skaComment){
+      var _orig = window.saveBill;
+      window.saveBill = async function(){
+        var box = document.getElementById('bill-comment');
+        window.__skaBillComment = box ? box.value.trim() : '';
+        try { return await _orig.apply(this, arguments); }
+        finally { window.__skaBillComment = ''; if (box) box.value = ''; }
+      };
+      window.saveBill.__skaComment = true;
+    }
+  }
+  patch(); setInterval(patch, 800);
+})();
+
+/* ==== V19-B: P (½) marker + comment in WhatsApp / SMS text ==== */
+(function(){
+  function patch(){
+    if (window.getBillText && !window.getBillText.__skaUnitComment){
+      var _orig = window.getBillText;
+      window.getBillText = function(){
+        var savedNames = null;
+        try {
+          if (typeof csbi !== 'undefined' && Array.isArray(csbi)){
+            savedNames = csbi.map(function(i){ return i.item_name; });
+            csbi.forEach(function(i){ if (i.unit === 'p') i.item_name = i.item_name + ' (P½)'; });
+          }
+        } catch(e){}
+        var t = _orig.apply(this, arguments);
+        try { if (savedNames && typeof csbi !== 'undefined') csbi.forEach(function(i, idx){ i.item_name = savedNames[idx]; }); } catch(e){}
+        try {
+          if (typeof csbill !== 'undefined' && csbill && csbill.comments){
+            var line = '\n📝 Note: ' + csbill.comments;
+            if (t.indexOf('\nThank you') > -1) t = t.replace('\nThank you', line + '\nThank you');
+            else t += line;
+          }
+        } catch(e){}
+        return t;
+      };
+      window.getBillText.__skaUnitComment = true;
+    }
+  }
+  patch(); setInterval(patch, 800);
+})();
+
+/* ==== V19-C: P (½) marker + comment in PDF invoice ==== */
+(function(){
+  function patch(){
+    if (window.shareViaPDF && !window.shareViaPDF.__skaUnitPdf){
+      var _orig = window.shareViaPDF;
+      window.shareViaPDF = async function(){
+        var saved = null;
+        try {
+          if (typeof csbi !== 'undefined' && Array.isArray(csbi)){
+            saved = csbi.map(function(i){ return i.item_name; });
+            csbi.forEach(function(i){ if (i.unit === 'p') i.item_name = i.item_name + ' (P½)'; });
+          }
+        } catch(e){}
+        try { return await _orig.apply(this, arguments); }
+        finally { try { if (saved && typeof csbi !== 'undefined') csbi.forEach(function(i, idx){ i.item_name = saved[idx]; }); } catch(e){} }
+      };
+      window.shareViaPDF.__skaUnitPdf = true;
+    }
+    try {
+      if (window.jspdf && window.jspdf.jsPDF && !window.jspdf.jsPDF.__skaCommentText){
+        var proto = window.jspdf.jsPDF.prototype;
+        var cur = proto.text;
+        proto.text = function(txt, x, y, opts){
+          if (txt === 'Thank you for your business!'){
+            try {
+              if (typeof csbill !== 'undefined' && csbill && csbill.comments){
+                cur.call(this, 'Note: ' + String(csbill.comments).substring(0, 90), 105, (y || 0) - 6, {align:'center'});
+              }
+            } catch(e){}
+          }
+          return cur.call(this, txt, x, y, opts);
+        };
+        window.jspdf.jsPDF.__skaCommentText = true;
+      }
+    } catch(e){}
+  }
+  patch(); setInterval(patch, 800);
+})();
+
+/* ==== V19-D: Show comment in View Bill (History) ==== */
+(function(){
+  function patch(){
+    if (window.viewBillDetails && !window.viewBillDetails.__skaComment){
+      var _orig = window.viewBillDetails;
+      window.viewBillDetails = async function(id){
+        await _orig.apply(this, arguments);
+        try {
+          var bills = await DB.query('bills');
+          var b = null;
+          for (var i=0;i<bills.length;i++){ if (String(bills[i].id) === String(id)) b = bills[i]; }
+          if (b && b.comments){
+            var info = document.querySelector('.view-bill-info');
+            if (info && !document.getElementById('ska-comment-row')){
+              var row = document.createElement('div');
+              row.id = 'ska-comment-row';
+              row.className = 'view-bill-info-row';
+              row.innerHTML = '<span class="label">📝 Comment:</span><span class="value">' + String(b.comments).replace(/</g,'&lt;') + '</span>';
+              info.appendChild(row);
+            }
+          }
+        } catch(e){}
+      };
+      window.viewBillDetails.__skaComment = true;
+    }
+  }
+  patch(); setInterval(patch, 800);
+})();
+
+/* ==== V19-E: Edit comment in Edit Bill modal ==== */
+(function(){
+  function patch(){
+    if (window.openEditModal && !window.openEditModal.__skaComment){
+      var _orig = window.openEditModal;
+      window.openEditModal = async function(billId){
+        await _orig.apply(this, arguments);
+        try {
+          var bills = await DB.query('bills');
+          var b = null;
+          for (var i=0;i<bills.length;i++){ if (String(bills[i].id) === String(billId)) b = bills[i]; }
+          var content = document.getElementById('edit-bill-content');
+          if (content && b && !document.getElementById('edit-bill-comment')){
+            var wrap = document.createElement('div');
+            wrap.style.cssText = 'margin:12px 0;';
+            wrap.innerHTML = '<label style="font-weight:600;font-size:0.85rem;">📝 Comment / Remarks</label><textarea id="edit-bill-comment" style="width:100%;min-height:60px;padding:10px;border:1.5px solid #dbe3ee;border-radius:10px;box-sizing:border-box;">' + String(b.comments||'').replace(/</g,'&lt;') + '</textarea>';
+            content.insertBefore(wrap, content.lastElementChild);
+          }
+        } catch(e){}
+      };
+      window.openEditModal.__skaComment = true;
+    }
+    if (window.saveEditedBill && !window.saveEditedBill.__skaComment){
+      var _se = window.saveEditedBill;
+      window.saveEditedBill = async function(){
+        var bid = null;
+        try { if (typeof editingBillId !== 'undefined') bid = editingBillId; } catch(e){}
+        var box = document.getElementById('edit-bill-comment');
+        var val = box ? box.value.trim() : '';
+        var r = await _se.apply(this, arguments);
+        try { if (bid){ await DB.update('bills', bid, { comments: val }); } } catch(e){}
+        return r;
+      };
+      window.saveEditedBill.__skaComment = true;
+    }
+  }
+  patch(); setInterval(patch, 800);
+})();
+
+/* ==== V20: CLEAN SHARE TEXT — No repeated markers, No 'S' badge ==== */
+window.getBillText = function(){
+  var u = curUser();
+  var shopName = (u && u.shop_name) ? u.shop_name.toUpperCase() : 'SK AAYURVEDA';
+  var subTitle = (u && u.subtitle) ? u.subtitle.toUpperCase() : 'KEVA SUPER STOCK POINT';
+  
+  /* Use global variables set by viewBillDetails/openShareModal */
+  var b = (typeof csbill !== 'undefined') ? csbill : null;
+  var items = (typeof csbi !== 'undefined') ? csbi : [];
+  
+  if (!b || !items.length) return "";
+
+  var lines = [];
+  lines.push('🕉️ *' + shopName + '*');
+  lines.push(subTitle);
+  lines.push('-------------------------');
+  lines.push('Bill No: *' + (b.bill_number || '') + '*');
+  
+  /* Stockist/Distributor ID logic */
+  var sidLabel = (b.customer_type === 'distributor') ? 'Distributor ID' : 'Stockist ID';
+  if (b.stockist_id) {
+    lines.push(sidLabel + ': *' + b.stockist_id + '*');
+  }
+  
+  lines.push('Date: ' + new Date(b.date).toLocaleString());
+  lines.push('-------------------------');
+  lines.push('Customer: ' + (b.cust_name || ''));
+  lines.push('Type: ' + (b.customer_type || '').toUpperCase());
+  lines.push('Mobile: ' + (b.cust_mobile || ''));
+  lines.push('');
+  lines.push('*ITEMS:*');
+  
+  items.forEach(function(it, idx){
+    var name = it.item_name;
+    
+    /* FIX: Only add marker for P, and ONLY ONCE */
+    if (it.unit === 'p') {
+      name += ' (P½)';
+    }
+    /* If unit is 's' or undefined, do NOTHING (clean name) */
+    
+    lines.push((idx+1) + '. ' + name);
+    lines.push('   Qty: ' + it.qty + ' | MRP: ' + parseFloat(it.mrp).toFixed(2) + ' | BP: ' + parseFloat(it.bp).toFixed(2));
+    lines.push('   Total MRP: Rs. ' + (it.mrp * it.qty).toFixed(2) + ' | Total BP: ' + (it.bp * it.qty).toFixed(2));
+  });
+  
+  lines.push('-------------------------');
+  lines.push('Total MRP: Rs. ' + parseFloat(b.total_mrp).toFixed(2));
+  lines.push('*TOTAL BP: ' + parseFloat(b.total_bp).toFixed(2) + '*');
+  
+  /* Comment/Remarks */
+  if (b.comments && b.comments.trim()) {
+    lines.push('');
+    lines.push('📝 Note: ' + b.comments.trim());
+  }
+  
+  lines.push('');
+  lines.push('Thank you! 🙏');
+  lines.push('*Please visit again!* ✨');
+  
+  return lines.join('\n');
+};
+
+/* ==== V21: FINAL CLEAN SHARE TEXT — No Stacking, No Repetition ==== */
+window.getBillText = function(){
+  /* 1. Get Raw Data Directly from Globals (Bypasses all wrappers) */
+  var b = (typeof csbill !== 'undefined') ? csbill : null;
+  var items = (typeof csbi !== 'undefined') ? csbi : [];
+  
+  if (!b || !items.length) return "";
+
+  /* 2. Prepare Clean Header Info */
+  var u = curUser();
+  var shopName = (u && u.shop_name) ? u.shop_name.toUpperCase() : 'SK AAYURVEDA';
+  var subTitle = (u && u.subtitle) ? u.subtitle.toUpperCase() : 'KEVA SUPER STOCK POINT';
+  var sidLabel = (b.customer_type === 'distributor') ? 'Distributor ID' : 'Stockist ID';
+  
+  /* 3. Build Lines Manually */
+  var lines = [];
+  lines.push('🕉️ *' + shopName + '*');
+  lines.push(subTitle);
+  lines.push('-------------------------');
+  lines.push('Bill No: *' + (b.bill_number || '') + '*');
+  if (b.stockist_id) lines.push(sidLabel + ': *' + b.stockist_id + '*');
+  lines.push('Date: ' + new Date(b.date).toLocaleString());
+  lines.push('-------------------------');
+  lines.push('Customer: ' + (b.cust_name || ''));
+  lines.push('Type: ' + (b.customer_type || '').toUpperCase());
+  lines.push('Mobile: ' + (b.cust_mobile || ''));
+  lines.push('');
+  lines.push('*ITEMS:*');
+
+  /* 4. Process Items Safely (Strip old markers first!) */
+  items.forEach(function(it, idx){
+    var name = String(it.item_name || '');
+    
+    /* SELF-CLEANING: Remove ALL existing (P½) or S tags to prevent stacking */
+    name = name.replace(/\s*\(P½\)/g, '').replace(/\s*S\b/g, '').trim();
+    
+    /* Add clean marker ONLY IF unit is 'p' */
+    if (it.unit === 'p') {
+      name += ' (P½)';
+    }
+    
+    lines.push((idx+1) + '. ' + name);
+    lines.push('   Qty: ' + it.qty + ' | MRP: ' + parseFloat(it.mrp).toFixed(2) + ' | BP: ' + parseFloat(it.bp).toFixed(2));
+    lines.push('   Total MRP: Rs. ' + (it.mrp * it.qty).toFixed(2) + ' | Total BP: ' + (it.bp * it.qty).toFixed(2));
+  });
+
+  lines.push('-------------------------');
+  lines.push('Total MRP: Rs. ' + parseFloat(b.total_mrp).toFixed(2));
+  lines.push('*TOTAL BP: ' + parseFloat(b.total_bp).toFixed(2) + '*');
+
+  /* 5. Comment Handling (Single Instance Only) */
+  if (b.comments && String(b.comments).trim()) {
+    lines.push('');
+    lines.push('📝 Note: ' + String(b.comments).trim());
+  }
+
+  lines.push('');
+  lines.push('Thank you! 🙏');
+  lines.push('*Please visit again!* ✨');
+
+  return lines.join('\n');
+};
+
+/* ==== V22 MASTER SHARE TEXT — Single Source of Truth ==== */
+(function(){
+  /* 1. Disable ALL previous wrappers to stop stacking */
+  if (window.getBillText && window.getBillText.__skaUnitComment) window.getBillText.__skaUnitComment = false;
+  if (window.getBillText && window.getBillText.__skaClean) window.getBillText.__skaClean = false;
+  
+  /* 2. Define the ONLY getBillText that matters */
+  window.getBillText = function(){
+    var b = (typeof csbill !== 'undefined') ? csbill : null;
+    var items = (typeof csbi !== 'undefined') ? csbi : [];
+    
+    if (!b || !items.length) return "";
+
+    var u = curUser();
+    var shopName = (u && u.shop_name) ? u.shop_name.toUpperCase() : 'SK AAYURVEDA';
+    var subTitle = (u && u.subtitle) ? u.subtitle.toUpperCase() : 'KEVA SUPER STOCK POINT';
+    var sidLabel = (b.customer_type === 'distributor') ? 'Distributor ID' : 'Stockist ID';
+    
+    var lines = [];
+    lines.push('🕉️ *' + shopName + '*');
+    lines.push(subTitle);
+    lines.push('-------------------------');
+    lines.push('Bill No: *' + (b.bill_number || '') + '*');
+    if (b.stockist_id) lines.push(sidLabel + ': *' + b.stockist_id + '*');
+    lines.push('Date: ' + new Date(b.date).toLocaleString());
+    lines.push('-------------------------');
+    lines.push('Customer: ' + (b.cust_name || ''));
+    lines.push('Type: ' + (b.customer_type || '').toUpperCase());
+    lines.push('Mobile: ' + (b.cust_mobile || ''));
+    lines.push('');
+    lines.push('*ITEMS:*');
+
+    items.forEach(function(it, idx){
+      /* PRESERVE ORIGINAL NAME (keeps "Buy 1 Get 2 Free" etc.) */
+      var name = String(it.item_name || '');
+      
+      /* Strip any accidental duplicate markers from previous runs just in case */
+      name = name.replace(/\s*\(P½\)/g, '').trim();
+      
+      /* Add P marker ONLY ONCE if needed */
+      if (it.unit === 'p') {
+        name += ' (P½)';
+      }
+      
+      lines.push((idx+1) + '. ' + name);
+      lines.push('   Qty: ' + it.qty + ' | MRP: ' + parseFloat(it.mrp).toFixed(2) + ' | BP: ' + parseFloat(it.bp).toFixed(2));
+      lines.push('   Total MRP: Rs. ' + (it.mrp * it.qty).toFixed(2) + ' | Total BP: ' + (it.bp * it.qty).toFixed(2));
+    });
+
+    lines.push('-------------------------');
+    lines.push('Total MRP: Rs. ' + parseFloat(b.total_mrp).toFixed(2));
+    lines.push('*TOTAL BP: ' + parseFloat(b.total_bp).toFixed(2) + '*');
+
+    /* SINGLE NOTE LINE */
+    if (b.comments && String(b.comments).trim()) {
+      lines.push('');
+      lines.push('📝 Note: ' + String(b.comments).trim());
+    }
+
+    lines.push('');
+    lines.push('Thank you! 🙏');
+    lines.push('*Please visit again!* ✨');
+
+    return lines.join('\n');
+  };
+})();
+
+/* ==== V23 MASTER SHARE TEXT — Smart Name Cleaning + No Repetition ==== */
+(function(){
+  /* Helper: Clean product name for Distributor/Customer */
+  function getCleanName(name, type){
+    if (!name) return '';
+    var n = String(name);
+    
+    /* Stockist keeps everything (offers included) */
+    if (type === 'stockist') return n;
+    
+    /* Distributor & Customer: Strip common offer patterns */
+    // Remove "(Buy 1 Get 2 Free)", "[Combo Pack]", "- Offer", "| Combo", etc.
+    n = n.replace(/\s*\(\s*(?:buy|get|offer|free|combo|pack|\d+\s*\+\s*\d+)[^)]*\)\s*/gi, '');
+    n = n.replace(/\s*\[\s*(?:buy|get|offer|free|combo|pack|\d+\s*\+\s*\d+)[^\]]*\]\s*/gi, '');
+    n = n.replace(/\s*(?:buy\s+\d+\s+get\s+\d+(?:\s+free)?|offer|combo\s+pack|value\s+pack|\d+\s*\+\s*\d+\s*(?:offer|free|pack)?|free\s+gift|special\s+offer)\s*/gi, '');
+    n = n.replace(/\s*-\s*(?:offer|combo|pack|free|buy\s+\d+|get\s+\d+)[^-]*$/gi, '');
+    n = n.replace(/\s*\|\s*(?:offer|combo|pack|free|buy|get)[^|]*$/gi, '');
+    
+    /* Trim whitespace and extra separators left behind */
+    n = n.replace(/\s+/g, ' ').trim();
+    n = n.replace(/[,.;:\-|]+\s*$/, '').trim(); // Remove trailing punctuation
+    
+    return n || name; /* Fallback to original if cleaning fails completely */
+  }
+
+  /* Replace getBillText with the single source of truth */
+  window.getBillText = function(){
+    var b = (typeof csbill !== 'undefined') ? csbill : null;
+    var items = (typeof csbi !== 'undefined') ? csbi : [];
+    
+    if (!b || !items.length) return "";
+
+    var u = curUser();
+    var shopName = (u && u.shop_name) ? u.shop_name.toUpperCase() : 'SK AAYURVEDA';
+    var subTitle = (u && u.subtitle) ? u.subtitle.toUpperCase() : 'KEVA SUPER STOCK POINT';
+    var custType = (b.customer_type || '').toLowerCase();
+    var sidLabel = (custType === 'distributor') ? 'Distributor ID' : 'Stockist ID';
+    
+    var lines = [];
+    lines.push('🕉️ *' + shopName + '*');
+    lines.push(subTitle);
+    lines.push('-------------------------');
+    lines.push('Bill No: *' + (b.bill_number || '') + '*');
+    if (b.stockist_id) lines.push(sidLabel + ': *' + b.stockist_id + '*');
+    lines.push('Date: ' + new Date(b.date).toLocaleString());
+    lines.push('-------------------------');
+    lines.push('Customer: ' + (b.cust_name || ''));
+    lines.push('Type: ' + custType.toUpperCase());
+    lines.push('Mobile: ' + (b.cust_mobile || ''));
+    lines.push('');
+    lines.push('*ITEMS:*');
+
+    items.forEach(function(it, idx){
+      /* Apply smart cleaning based on customer type */
+      var displayName = getCleanName(it.item_name, custType);
+      
+      /* Add P marker ONLY ONCE if needed */
+      if (it.unit === 'p') {
+        displayName += ' (P½)';
+      }
+      
+      lines.push((idx+1) + '. ' + displayName);
+      lines.push('   Qty: ' + it.qty + ' | MRP: ' + parseFloat(it.mrp).toFixed(2) + ' | BP: ' + parseFloat(it.bp).toFixed(2));
+      lines.push('   Total MRP: Rs. ' + (it.mrp * it.qty).toFixed(2) + ' | Total BP: ' + (it.bp * it.qty).toFixed(2));
+    });
+
+    lines.push('-------------------------');
+    lines.push('Total MRP: Rs. ' + parseFloat(b.total_mrp).toFixed(2));
+    lines.push('*TOTAL BP: ' + parseFloat(b.total_bp).toFixed(2) + '*');
+
+    /* SINGLE NOTE LINE */
+    if (b.comments && String(b.comments).trim()) {
+      lines.push('');
+      lines.push('📝 Note: ' + String(b.comments).trim());
+    }
+
+    lines.push('');
+    lines.push('Thank you! 🙏');
+    lines.push('*Please visit again!* ✨');
+
+    return lines.join('\n');
+  };
+  
+  console.log("✅ V23 Loaded: Smart Name Cleaning Active");
+})();
+
+/* ==== V24 DEEP CLEAN SHARE — No Stacking, Smart Names ==== */
+(function(){
+  
+  /* Helper: Strip ALL known markers/offers to get base name */
+  function getBaseName(name){
+    if (!name) return '';
+    var n = String(name);
+    // Remove P½ markers
+    n = n.replace(/\s*\(P½\)/gi, '');
+    // Remove common offer patterns for Distributor/Customer
+    n = n.replace(/\s*\(\s*(?:buy|get|offer|free|combo|pack|\d+\s*\+\s*\d+)[^)]*\)\s*/gi, '');
+    n = n.replace(/\s*\[\s*(?:buy|get|offer|free|combo|pack|\d+\s*\+\s*\d+)[^\]]*\]\s*/gi, '');
+    n = n.replace(/\s*(?:buy\s+\d+\s+get\s+\d+(?:\s+free)?|offer|combo\s+pack|value\s+pack|\d+\s*\+\s*\d+\s*(?:offer|free|pack)?|free\s+gift|special\s+offer)\s*/gi, '');
+    n = n.replace(/\s*-\s*(?:offer|combo|pack|free|buy\s+\d+|get\s+\d+)[^-]*$/gi, '');
+    n = n.replace(/\s*\|\s*(?:offer|combo|pack|free|buy|get)[^|]*$/gi, '');
+    return n.trim();
+  }
+
+  /* Replace getBillText with the ONLY version that matters */
+  window.getBillText = function(){
+    var b = (typeof csbill !== 'undefined') ? csbill : null;
+    var items = (typeof csbi !== 'undefined') ? csbi : [];
+    
+    if (!b || !items.length) return "";
+
+    var u = curUser();
+    var shopName = (u && u.shop_name) ? u.shop_name.toUpperCase() : 'SK AAYURVEDA';
+    var subTitle = (u && u.subtitle) ? u.subtitle.toUpperCase() : 'KEVA SUPER STOCK POINT';
+    var custType = (b.customer_type || '').toLowerCase();
+    var sidLabel = (custType === 'distributor') ? 'Distributor ID' : 'Stockist ID';
+    
+    var lines = [];
+    lines.push('🕉️ *' + shopName + '*');
+    lines.push(subTitle);
+    lines.push('-------------------------');
+    lines.push('Bill No: *' + (b.bill_number || '') + '*');
+    if (b.stockist_id) lines.push(sidLabel + ': *' + b.stockist_id + '*');
+    lines.push('Date: ' + new Date(b.date).toLocaleString());
+    lines.push('-------------------------');
+    lines.push('Customer: ' + (b.cust_name || ''));
+    lines.push('Type: ' + custType.toUpperCase());
+    lines.push('Mobile: ' + (b.cust_mobile || ''));
+    lines.push('');
+    lines.push('*ITEMS:*');
+
+    items.forEach(function(it, idx){
+      /* 1. Get Base Name (strips all old P½ and offers) */
+      var baseName = getBaseName(it.item_name);
+      
+      /* 2. Determine Final Display Name */
+      var displayName = baseName;
+      
+      if (custType === 'stockist') {
+        /* Stockist: Keep full original name IF it had offers, else use base */
+        // Check if original had offer keywords
+        if (/buy|get|offer|free|combo/i.test(String(it.item_name))) {
+           displayName = String(it.item_name).replace(/\s*\(P½\)/gi, '').trim();
+        }
+      }
+      
+      /* 3. Add P½ marker ONCE if unit is p */
+      if (it.unit === 'p') {
+        displayName += ' (P½)';
+      }
+      
+      lines.push((idx+1) + '. ' + displayName);
+      lines.push('   Qty: ' + it.qty + ' | MRP: ' + parseFloat(it.mrp).toFixed(2) + ' | BP: ' + parseFloat(it.bp).toFixed(2));
+      lines.push('   Total MRP: Rs. ' + (it.mrp * it.qty).toFixed(2) + ' | Total BP: ' + (it.bp * it.qty).toFixed(2));
+    });
+
+    lines.push('-------------------------');
+    lines.push('Total MRP: Rs. ' + parseFloat(b.total_mrp).toFixed(2));
+    lines.push('*TOTAL BP: ' + parseFloat(b.total_bp).toFixed(2) + '*');
+
+    /* 4. Single Note Line */
+    if (b.comments && String(b.comments).trim()) {
+      lines.push('');
+      lines.push('📝 Note: ' + String(b.comments).trim());
+    }
+
+    lines.push('');
+    lines.push('Thank you! 🙏');
+    lines.push('*Please visit again!* ✨');
+
+    return lines.join('\n');
+  };
+  
+  console.log("✅ V24 Loaded: Deep Clean Share Active");
+})();
+
+/* ==== V25 HARD RESET SHARE — No Stacking, Single Note, Smart Names ==== */
+(function(){
+  
+  /* Helper: Strip ALL known markers/offers to get base name */
+  function getBaseName(name){
+    if (!name) return '';
+    var n = String(name);
+    // Remove P½ markers first
+    n = n.replace(/\s*\(P½\)/gi, '');
+    // Remove common offer patterns for Distributor/Customer
+    n = n.replace(/\s*\(\s*(?:buy|get|offer|free|combo|pack|\d+\s*\+\s*\d+)[^)]*\)\s*/gi, '');
+    n = n.replace(/\s*\[\s*(?:buy|get|offer|free|combo|pack|\d+\s*\+\s*\d+)[^\]]*\]\s*/gi, '');
+    n = n.replace(/\s*(?:buy\s+\d+\s+get\s+\d+(?:\s+free)?|offer|combo\s+pack|value\s+pack|\d+\s*\+\s*\d+\s*(?:offer|free|pack)?|free\s+gift|special\s+offer)\s*/gi, '');
+    n = n.replace(/\s*-\s*(?:offer|combo|pack|free|buy\s+\d+|get\s+\d+)[^-]*$/gi, '');
+    n = n.replace(/\s*\|\s*(?:offer|combo|pack|free|buy|get)[^|]*$/gi, '');
+    return n.trim();
+  }
+
+  /* Replace getBillText with the ONLY version that matters */
+  window.getBillText = function(){
+    var b = (typeof csbill !== 'undefined') ? csbill : null;
+    var items = (typeof csbi !== 'undefined') ? csbi : [];
+    
+    if (!b || !items.length) return "";
+
+    var u = curUser();
+    var shopName = (u && u.shop_name) ? u.shop_name.toUpperCase() : 'SK AAYURVEDA';
+    var subTitle = (u && u.subtitle) ? u.subtitle.toUpperCase() : 'KEVA SUPER STOCK POINT';
+    var custType = (b.customer_type || '').toLowerCase();
+    var sidLabel = (custType === 'distributor') ? 'Distributor ID' : 'Stockist ID';
+    
+    var lines = [];
+    lines.push('🕉️ *' + shopName + '*');
+    lines.push(subTitle);
+    lines.push('-------------------------');
+    lines.push('Bill No: *' + (b.bill_number || '') + '*');
+    if (b.stockist_id) lines.push(sidLabel + ': *' + b.stockist_id + '*');
+    lines.push('Date: ' + new Date(b.date).toLocaleString());
+    lines.push('-------------------------');
+    lines.push('Customer: ' + (b.cust_name || ''));
+    lines.push('Type: ' + custType.toUpperCase());
+    lines.push('Mobile: ' + (b.cust_mobile || ''));
+    lines.push('');
+    lines.push('*ITEMS:*');
+
+    items.forEach(function(it, idx){
+      /* 1. Get Base Name (strips all old P½ and offers) */
+      var baseName = getBaseName(it.item_name);
+      
+      /* 2. Determine Final Display Name */
+      var displayName = baseName;
+      
+      if (custType === 'stockist') {
+        /* Stockist: Keep full original name IF it had offers, else use base */
+        if (/buy|get|offer|free|combo/i.test(String(it.item_name))) {
+           displayName = String(it.item_name).replace(/\s*\(P½\)/gi, '').trim();
+        }
+      }
+      
+      /* 3. Add P½ marker ONCE if unit is p */
+      if (it.unit === 'p') {
+        displayName += ' (P½)';
+      }
+      
+      lines.push((idx+1) + '. ' + displayName);
+      lines.push('   Qty: ' + it.qty + ' | MRP: ' + parseFloat(it.mrp).toFixed(2) + ' | BP: ' + parseFloat(it.bp).toFixed(2));
+      lines.push('   Total MRP: Rs. ' + (it.mrp * it.qty).toFixed(2) + ' | Total BP: ' + (it.bp * it.qty).toFixed(2));
+    });
+
+    lines.push('-------------------------');
+    lines.push('Total MRP: Rs. ' + parseFloat(b.total_mrp).toFixed(2));
+    lines.push('*TOTAL BP: ' + parseFloat(b.total_bp).toFixed(2) + '*');
+
+    /* 4. SINGLE NOTE LINE (Sanitized) */
+    if (b.comments && String(b.comments).trim()) {
+      lines.push('');
+      /* Take only the FIRST line of the comment to avoid multi-line stacking issues */
+      var cleanComment = String(b.comments).split('\n')[0].trim();
+      lines.push('📝 Note: ' + cleanComment);
+    }
+
+    lines.push('');
+    lines.push('Thank you! 🙏');
+    lines.push('*Please visit again!* ✨');
+
+    return lines.join('\n');
+  };
+  
+  console.log("✅ V25 Loaded: Hard Reset Share Active");
+})();
+
+/* ==== V26 HARD RESET FINAL — No Stacking, Single Note, Smart Names ==== */
+(function(){
+  
+  /* Helper: Strip ALL known markers/offers to get base name */
+  function getBaseName(name){
+    if (!name) return '';
+    var n = String(name);
+    // Remove P½ markers first
+    n = n.replace(/\s*\(P½\)/gi, '');
+    // Remove common offer patterns for Distributor/Customer
+    n = n.replace(/\s*\(\s*(?:buy|get|offer|free|combo|pack|\d+\s*\+\s*\d+)[^)]*\)\s*/gi, '');
+    n = n.replace(/\s*\[\s*(?:buy|get|offer|free|combo|pack|\d+\s*\+\s*\d+)[^\]]*\]\s*/gi, '');
+    n = n.replace(/\s*(?:buy\s+\d+\s+get\s+\d+(?:\s+free)?|offer|combo\s+pack|value\s+pack|\d+\s*\+\s*\d+\s*(?:offer|free|pack)?|free\s+gift|special\s+offer)\s*/gi, '');
+    n = n.replace(/\s*-\s*(?:offer|combo|pack|free|buy\s+\d+|get\s+\d+)[^-]*$/gi, '');
+    n = n.replace(/\s*\|\s*(?:offer|combo|pack|free|buy|get)[^|]*$/gi, '');
+    return n.trim();
+  }
+
+  /* Replace getBillText with the ONLY version that matters */
+  window.getBillText = function(){
+    var b = (typeof csbill !== 'undefined') ? csbill : null;
+    var items = (typeof csbi !== 'undefined') ? csbi : [];
+    
+    if (!b || !items.length) return "";
+
+    var u = curUser();
+    var shopName = (u && u.shop_name) ? u.shop_name.toUpperCase() : 'SK AAYURVEDA';
+    var subTitle = (u && u.subtitle) ? u.subtitle.toUpperCase() : 'KEVA SUPER STOCK POINT';
+    var custType = (b.customer_type || '').toLowerCase();
+    var sidLabel = (custType === 'distributor') ? 'Distributor ID' : 'Stockist ID';
+    
+    var lines = [];
+    lines.push('🕉️ *' + shopName + '*');
+    lines.push(subTitle);
+    lines.push('-------------------------');
+    lines.push('Bill No: *' + (b.bill_number || '') + '*');
+    if (b.stockist_id) lines.push(sidLabel + ': *' + b.stockist_id + '*');
+    lines.push('Date: ' + new Date(b.date).toLocaleString());
+    lines.push('-------------------------');
+    lines.push('Customer: ' + (b.cust_name || ''));
+    lines.push('Type: ' + custType.toUpperCase());
+    lines.push('Mobile: ' + (b.cust_mobile || ''));
+    lines.push('');
+    lines.push('*ITEMS:*');
+
+    items.forEach(function(it, idx){
+      /* 1. Get Base Name (strips all old P½ and offers) */
+      var baseName = getBaseName(it.item_name);
+      
+      /* 2. Determine Final Display Name */
+      var displayName = baseName;
+      
+      if (custType === 'stockist') {
+        /* Stockist: Keep full original name IF it had offers, else use base */
+        if (/buy|get|offer|free|combo/i.test(String(it.item_name))) {
+           displayName = String(it.item_name).replace(/\s*\(P½\)/gi, '').trim();
+        }
+      }
+      
+      /* 3. Add P½ marker ONCE if unit is p */
+      if (it.unit === 'p') {
+        displayName += ' (P½)';
+      }
+      
+      lines.push((idx+1) + '. ' + displayName);
+      lines.push('   Qty: ' + it.qty + ' | MRP: ' + parseFloat(it.mrp).toFixed(2) + ' | BP: ' + parseFloat(it.bp).toFixed(2));
+      lines.push('   Total MRP: Rs. ' + (it.mrp * it.qty).toFixed(2) + ' | Total BP: ' + (it.bp * it.qty).toFixed(2));
+    });
+
+    lines.push('-------------------------');
+    lines.push('Total MRP: Rs. ' + parseFloat(b.total_mrp).toFixed(2));
+    lines.push('*TOTAL BP: ' + parseFloat(b.total_bp).toFixed(2) + '*');
+
+    /* 4. SINGLE NOTE LINE (Sanitized) */
+    if (b.comments && String(b.comments).trim()) {
+      lines.push('');
+      /* Take only the FIRST line of the comment to avoid multi-line stacking issues */
+      var cleanComment = String(b.comments).split('\n')[0].trim();
+      lines.push('📝 Note: ' + cleanComment);
+    }
+
+    lines.push('');
+    lines.push('Thank you! 🙏');
+    lines.push('*Please visit again!* ✨');
+
+    return lines.join('\n');
+  };
+  
+  console.log("✅ V26 Loaded: Hard Reset Share Active");
+})();
+
+/* ==== V27 SELF-HEALING SHARE — Fixes Duplicate Notes Automatically ==== */
+(function(){
+  
+  /* Helper: Strip ALL known markers/offers to get base name */
+  function getBaseName(name){
+    if (!name) return '';
+    var n = String(name);
+    // Remove P½ markers first
+    n = n.replace(/\s*\(P½\)/gi, '');
+    // Remove common offer patterns for Distributor/Customer
+    n = n.replace(/\s*\(\s*(?:buy|get|offer|free|combo|pack|\d+\s*\+\s*\d+)[^)]*\)\s*/gi, '');
+    n = n.replace(/\s*\[\s*(?:buy|get|offer|free|combo|pack|\d+\s*\+\s*\d+)[^\]]*\]\s*/gi, '');
+    n = n.replace(/\s*(?:buy\s+\d+\s+get\s+\d+(?:\s+free)?|offer|combo\s+pack|value\s+pack|\d+\s*\+\s*\d+\s*(?:offer|free|pack)?|free\s+gift|special\s+offer)\s*/gi, '');
+    n = n.replace(/\s*-\s*(?:offer|combo|pack|free|buy\s+\d+|get\s+\d+)[^-]*$/gi, '');
+    n = n.replace(/\s*\|\s*(?:offer|combo|pack|free|buy|get)[^|]*$/gi, '');
+    return n.trim();
+  }
+
+  /* Replace getBillText with the ONLY version that matters */
+  window.getBillText = function(){
+    var b = (typeof csbill !== 'undefined') ? csbill : null;
+    var items = (typeof csbi !== 'undefined') ? csbi : [];
+    
+    if (!b || !items.length) return "";
+
+    var u = curUser();
+    var shopName = (u && u.shop_name) ? u.shop_name.toUpperCase() : 'SK AAYURVEDA';
+    var subTitle = (u && u.subtitle) ? u.subtitle.toUpperCase() : 'KEVA SUPER STOCK POINT';
+    var custType = (b.customer_type || '').toLowerCase();
+    var sidLabel = (custType === 'distributor') ? 'Distributor ID' : 'Stockist ID';
+    
+    var lines = [];
+    lines.push('🕉️ *' + shopName + '*');
+    lines.push(subTitle);
+    lines.push('-------------------------');
+    lines.push('Bill No: *' + (b.bill_number || '') + '*');
+    if (b.stockist_id) lines.push(sidLabel + ': *' + b.stockist_id + '*');
+    lines.push('Date: ' + new Date(b.date).toLocaleString());
+    lines.push('-------------------------');
+    lines.push('Customer: ' + (b.cust_name || ''));
+    lines.push('Type: ' + custType.toUpperCase());
+    lines.push('Mobile: ' + (b.cust_mobile || ''));
+    lines.push('');
+    lines.push('*ITEMS:*');
+
+    items.forEach(function(it, idx){
+      /* 1. Get Base Name (strips all old P½ and offers) */
+      var baseName = getBaseName(it.item_name);
+      
+      /* 2. Determine Final Display Name */
+      var displayName = baseName;
+      
+      if (custType === 'stockist') {
+        /* Stockist: Keep full original name IF it had offers, else use base */
+        if (/buy|get|offer|free|combo/i.test(String(it.item_name))) {
+           displayName = String(it.item_name).replace(/\s*\(P½\)/gi, '').trim();
+        }
+      }
+      
+      /* 3. Add P½ marker ONCE if unit is p */
+      if (it.unit === 'p') {
+        displayName += ' (P½)';
+      }
+      
+      lines.push((idx+1) + '. ' + displayName);
+      lines.push('   Qty: ' + it.qty + ' | MRP: ' + parseFloat(it.mrp).toFixed(2) + ' | BP: ' + parseFloat(it.bp).toFixed(2));
+      lines.push('   Total MRP: Rs. ' + (it.mrp * it.qty).toFixed(2) + ' | Total BP: ' + (it.bp * it.qty).toFixed(2));
+    });
+
+    lines.push('-------------------------');
+    lines.push('Total MRP: Rs. ' + parseFloat(b.total_mrp).toFixed(2));
+    lines.push('*TOTAL BP: ' + parseFloat(b.total_bp).toFixed(2) + '*');
+
+    /* 4. SINGLE NOTE LINE (SELF-HEALING LOGIC) */
+    if (b.comments && String(b.comments).trim()) {
+      lines.push('');
+      
+      /* Split by newline to handle stacked comments */
+      var rawLines = String(b.comments).split('\n');
+      var cleanComment = '';
+      
+      /* Find the FIRST non-empty line that looks like a note */
+      for (var i=0; i<rawLines.length; i++) {
+        var t = rawLines[i].trim();
+        /* Ignore empty lines or lines that are just "📝 Note:" prefixes from bad data */
+        if (t && !/^📝?\s*Note:\s*$/.test(t)) {
+          /* If it already has "Note:", strip it to avoid double prefixing */
+          if (/^📝?\s*Note:\s*/i.test(t)) {
+             cleanComment = t.replace(/^📝?\s*Note:\s*/i, '').trim();
+          } else {
+             cleanComment = t;
+          }
+          break; /* Take ONLY the first valid line */
+        }
+      }
+      
+      if (cleanComment) {
+        lines.push('📝 Note: ' + cleanComment);
+      }
+    }
+
+    lines.push('');
+    lines.push('Thank you! 🙏');
+    lines.push('*Please visit again!* ✨');
+
+    return lines.join('\n');
+  };
+  
+  console.log("✅ V27 Loaded: Self-Healing Share Active");
+})();
+
+/* ==== V28: STOP THE SNOWBALL — clean builder + freeze all old patch timers ==== */
+(function(){
+
+  function getBaseName(name){
+    if (!name) return '';
+    var n = String(name);
+    n = n.replace(/\s*\(P½\)/gi, '');
+    n = n.replace(/\s*\(\s*(?:buy|get|offer|free|combo|pack|\d+\s*\+\s*\d+)[^)]*\)\s*/gi, '');
+    n = n.replace(/\s*\[\s*(?:buy|get|offer|free|combo|pack|\d+\s*\+\s*\d+)[^\]]*\]\s*/gi, '');
+    n = n.replace(/\s*(?:buy\s+\d+\s+get\s+\d+(?:\s+free)?|offer|combo\s+pack|value\s+pack|\d+\s*\+\s*\d+\s*(?:offer|free|pack)?|free\s+gift|special\s+offer)\s*/gi, '');
+    n = n.replace(/\s*-\s*(?:offer|combo|pack|free|buy\s+\d+|get\s+\d+)[^-]*$/gi, '');
+    n = n.replace(/\s*\|\s*(?:offer|combo|pack|free|buy|get)[^|]*$/gi, '');
+    return n.trim();
+  }
+
+  /* THE ONLY getBillText */
+  window.getBillText = function(){
+    var b = (typeof csbill !== 'undefined') ? csbill : null;
+    var items = (typeof csbi !== 'undefined') ? csbi : [];
+    if (!b || !items || !items.length) return "";
+
+    var u = curUser();
+    var shopName = (u && u.shop_name) ? u.shop_name.toUpperCase() : 'SK AAYURVEDA';
+    var subTitle = (u && u.subtitle) ? u.subtitle.toUpperCase() : 'KEVA SUPER STOCK POINT';
+    var custType = (b.customer_type || '').toLowerCase();
+    var sidLabel = (custType === 'distributor') ? 'Distributor ID' : 'Stockist ID';
+
+    var lines = [];
+    lines.push('🕉️ *' + shopName + '*');
+    lines.push(subTitle);
+    lines.push('-------------------------');
+    lines.push('Bill No: *' + (b.bill_number || '') + '*');
+    if (b.stockist_id) lines.push(sidLabel + ': *' + b.stockist_id + '*');
+    lines.push('Date: ' + new Date(b.date).toLocaleString());
+    lines.push('-------------------------');
+    lines.push('Customer: ' + (b.cust_name || ''));
+    lines.push('Type: ' + custType.toUpperCase());
+    lines.push('Mobile: ' + (b.cust_mobile || ''));
+    lines.push('');
+    lines.push('*ITEMS:*');
+
+    items.forEach(function(it, idx){
+      var displayName;
+      if (custType === 'stockist'){
+        displayName = String(it.item_name || '').replace(/\s*\(P½\)/gi, '').trim();
+      } else {
+        displayName = getBaseName(it.item_name);
+      }
+      if (it.unit === 'p') displayName += ' (P½)';
+      lines.push((idx+1) + '. ' + displayName);
+      lines.push('   Qty: ' + it.qty + ' | MRP: ' + parseFloat(it.mrp).toFixed(2) + ' | BP: ' + parseFloat(it.bp).toFixed(2));
+      lines.push('   Total MRP: Rs. ' + (it.mrp * it.qty).toFixed(2) + ' | Total BP: ' + (it.bp * it.qty).toFixed(2));
+    });
+
+    lines.push('-------------------------');
+    lines.push('Total MRP: Rs. ' + parseFloat(b.total_mrp).toFixed(2));
+    lines.push('*TOTAL BP: ' + parseFloat(b.total_bp).toFixed(2) + '*');
+
+    if (b.comments && String(b.comments).trim()){
+      /* dedupe repeated lines in stored comment */
+      var parts = String(b.comments).split('\n')
+        .map(function(x){ return x.replace(/^📝?\s*Note:\s*/i,'').trim(); })
+        .filter(function(x){ return x.length > 0; });
+      var uniq = [];
+      parts.forEach(function(x){ if (uniq.indexOf(x) === -1) uniq.push(x); });
+      if (uniq.length){ lines.push(''); lines.push('📝 Note: ' + uniq.join(' | ')); }
+    }
+
+    lines.push('');
+    lines.push('Thank you! 🙏');
+    lines.push('*Please visit again!* ✨');
+    return lines.join('\n');
+  };
+
+  /* FREEZE: stamp every legacy patch-flag on every wrapped function, forever */
+  function stamp(fn, flags){ if (!fn) return; for (var i=0;i<flags.length;i++){ try { fn[flags[i]] = true; } catch(e){} } }
+  function stampAll(){
+    stamp(window.getBillText,        ['__skaPatched','__skaUnitComment','__skaClean','__skaUnit','__skaComment']);
+    stamp(window.viewBillDetails,    ['__skaPatched','__skaUnit','__skaUnitFix','__skaComment']);
+    stamp(window.openEditModal,      ['__skaUnit','__skaComment']);
+    stamp(window.saveEditedBill,     ['__skaComment']);
+    stamp(window.shareViaPDF,        ['__skaUnitPdf','__skaPatched']);
+    stamp(window.openShareModal,     ['__skaPatched']);
+    stamp(window.saveBill,           ['__skaStats','__skaUnit','__skaComment']);
+    stamp(window.applyUserSettings,  ['__skaStats']);
+    stamp(window.switchSettingsPanel,['__skaPatched','__skaStats2']);
+    stamp(window.switchUserPanel,    ['__skaStats2']);
+    stamp(window.updatePriceDisplay, ['__skaPatched']);
+    stamp(window.selectCustomer,     ['__skaPatched2']);
+    stamp(window.manualFetchStockistId, ['__skaPatched']);
+    stamp(window.autoFetchStockistId,   ['__skaPatched']);
+    stamp(window.openAddCustomerModal,  ['__skaPatched']);
+    stamp(window.saveNewCustomer,       ['__skaPatched']);
+    stamp(window.generateBillNumber,    ['__skaPatched']);
+    stamp(window.renderCart,            ['__skaPatched']);
+    stamp(window.updateMonthlySummary,  ['__skaPatched']);
+  }
+  stampAll();
+  setInterval(stampAll, 300);   /* any new layer gets frozen within 300ms */
+
+  console.log('✅ V28 Loaded: snowball stopped');
+})();
+
+/* ==== V29: RESPONSIVE — all screen sizes, notches, landscape, tablets ==== */
+(function(){
+  /* 1) Upgrade viewport meta for notch/safe-area support */
+  try {
+    var mv = document.querySelector('meta[name="viewport"]');
+    if (mv) mv.setAttribute('content', 'width=device-width, initial-scale=1.0, viewport-fit=cover');
+  } catch(e){}
+
+  /* 2) Inject responsive stylesheet (replace old one if present) */
+  var old = document.getElementById('ska-responsive-css');
+  if (old) old.remove();
+  var st = document.createElement('style');
+  st.id = 'ska-responsive-css';
+  st.textContent = [
+    'html{-webkit-text-size-adjust:100%;text-size-adjust:100%}',
+    /* Notch / safe-area padding */
+    '.header{padding-top:max(16px, env(safe-area-inset-top))!important;padding-left:max(15px, env(safe-area-inset-left))!important;padding-right:max(15px, env(safe-area-inset-right))!important}',
+    '.container{padding-left:max(12px, env(safe-area-inset-left))!important;padding-right:max(12px, env(safe-area-inset-right))!important;padding-bottom:max(16px, env(safe-area-inset-bottom))!important}',
+    '.tabs{padding-left:env(safe-area-inset-left)!important;padding-right:env(safe-area-inset-right)!important}',
+
+    /* ===== EXTRA SMALL PHONES (<360px) ===== */
+    '@media (max-width:359px){',
+    'body{font-size:14px}',
+    '.header h2{font-size:1.05rem!important;letter-spacing:.5px!important}',
+    '.header .subtitle{font-size:.6rem!important;letter-spacing:1.2px!important}',
+    '.tab-btn{padding:8px 2px!important;font-size:.66rem!important;gap:2px!important;min-height:48px!important}',
+    '.tab-btn .tab-icon{font-size:1.05rem!important}',
+    '.card{padding:12px!important;border-radius:12px!important}',
+    '.card h3{font-size:.9rem!important}',
+    'input[type="text"],input[type="tel"],input[type="number"],select{padding:9px 10px!important;font-size:.88rem!important}',
+    '.btn{padding:10px 12px!important;font-size:.88rem!important}',
+    'table{font-size:.72rem!important;min-width:520px!important}',
+    'th,td{padding:6px 4px!important}',
+    '.summary-grid div{font-size:.66rem!important;padding:8px 3px!important}',
+    '.summary-grid span{font-size:.88rem!important}',
+    '.settings-submenu button{font-size:.7rem!important;padding:8px 3px!important}',
+    '.modal-content{padding:14px!important;width:94%!important}',
+    '.bill-item,.cust-item,.cust-item-req,.mgmt-cust-item{padding:10px!important}',
+    '.price-selection{gap:8px!important;padding:8px!important}',
+    '.price-selection label{font-size:.78rem!important}',
+    '}',
+
+    /* ===== SMALL PHONES (360–479px) ===== */
+    '@media (min-width:360px) and (max-width:479px){',
+    '.header h2{font-size:1.2rem!important}',
+    '.tab-btn{font-size:.74rem!important}',
+    'table{font-size:.78rem!important}',
+    '.card{padding:15px!important}',
+    '}',
+
+    /* ===== LARGE PHONES (480–767px) ===== */
+    '@media (min-width:480px) and (max-width:767px){',
+    '.container{max-width:640px!important}',
+    '.header h2{font-size:1.4rem!important}',
+    'table{font-size:.85rem!important}',
+    '.btn{font-size:1rem!important}',
+    '.card{padding:18px!important}',
+    '}',
+
+    /* ===== TABLETS & DESKTOP (768px+) ===== */
+    '@media (min-width:768px){',
+    '.container{max-width:860px!important}',
+    '.header{padding:20px!important}',
+    '.header h2{font-size:1.6rem!important}',
+    '.tab-btn{font-size:.9rem!important;padding:14px 8px!important;min-height:60px!important}',
+    '.card{padding:22px!important;border-radius:18px!important}',
+    'table{font-size:.9rem!important;min-width:700px!important}',
+    'th,td{padding:10px 8px!important}',
+    '.summary-grid div{font-size:.9rem!important;padding:14px 8px!important}',
+    '.modal-content{max-width:680px!important;padding:26px!important}',
+    '.settings-submenu button{font-size:.95rem!important;padding:12px!important}',
+    '}',
+
+    /* ===== WIDE DESKTOP (1024px+) ===== */
+    '@media (min-width:1024px){',
+    '.container{max-width:960px!important}',
+    'body{font-size:16px}',
+    '.card{box-shadow:0 4px 10px rgba(15,23,42,.06),0 16px 40px rgba(15,23,42,.08)!important}',
+    '.header h2{font-size:1.75rem!important}',
+    '}',
+
+    /* ===== LANDSCAPE PHONES ===== */
+    '@media (max-height:480px) and (orientation:landscape){',
+    '.header{padding:8px 15px!important;position:static!important}',
+    '.tabs{position:static!important}',
+    '.header h2{font-size:1rem!important}',
+    '.header .subtitle{font-size:.58rem!important;margin-top:1px!important}',
+    '.tab-btn{flex-direction:row!important;padding:6px 4px!important;font-size:.7rem!important;min-height:40px!important;gap:6px!important}',
+    '.tab-btn .tab-icon{font-size:1rem!important}',
+    '.container{padding-top:8px!important}',
+    '}',
+
+    /* ===== HIGH-DPI / RETINA crispness ===== */
+    '@media (-webkit-min-device-pixel-ratio:2), (min-resolution:192dpi){',
+    '.card{box-shadow:0 2px 6px rgba(15,23,42,.07),0 10px 28px rgba(15,23,42,.09)!important}',
+    '.header{box-shadow:0 4px 18px rgba(2,6,23,.4)!important}',
+    '}',
+
+    /* ===== TOUCH TARGETS (accessibility) ===== */
+    '.btn-small{min-height:36px!important}',
+    '.settings-submenu button{min-height:42px!important}',
+    '.search-dropdown .dropdown-item{min-height:44px!important}',
+    '.bill-item,.cust-item,.cust-item-req,.mgmt-cust-item{min-height:52px!important}',
+
+    /* ===== PRINT (clean bill print) ===== */
+    '@media print{',
+    '.tabs,.header,.btn,.search-dropdown{display:none!important}',
+    'body{background:#fff!important}',
+    '.card{box-shadow:none!important;border:1px solid #ccc!important}',
+    '}'
+  ].join('');
+  document.head.appendChild(st);
+
+  console.log('✅ V29 Loaded: Responsive layouts active');
+})();
+
+/* ==== V30: FIT SCREEN — no horizontal page overflow, wrapping settings menu ==== */
+(function(){
+  var old = document.getElementById('ska-fit-css');
+  if (old) old.remove();
+  var st = document.createElement('style');
+  st.id = 'ska-fit-css';
+  st.textContent = [
+    /* 1) Lock the PAGE against sideways scrolling */
+    'html,body{overflow-x:hidden!important;max-width:100%!important;width:100%!important}',
+    '.container{max-width:100%!important;overflow-x:hidden!important;box-sizing:border-box!important}',
+    '.tab-content{max-width:100%!important}',
+    '.card{max-width:100%!important;box-sizing:border-box!important}',
+
+    /* 2) Settings submenu: WRAP into rows instead of overflowing */
+    '.settings-submenu{flex-wrap:wrap!important;gap:4px!important;padding:4px!important;box-sizing:border-box!important}',
+    '.settings-submenu button{flex:1 1 30%!important;min-width:30%!important;white-space:normal!important;line-height:1.2!important;font-size:.78rem!important;padding:10px 4px!important;border-radius:8px!important}',
+    '@media (max-width:479px){',
+    '.settings-submenu button{flex:1 1 46%!important;min-width:46%!important;font-size:.72rem!important}',
+    '}',
+    '@media (max-width:359px){',
+    '.settings-submenu button{flex:1 1 46%!important;min-width:46%!important;font-size:.66rem!important;padding:8px 2px!important}',
+    '}',
+
+    /* 3) Keep wide tables scrolling INSIDE their box only */
+    '.table-wrap{max-width:100%!important;overflow-x:auto!important}',
+
+    /* 4) Admin user form: never exceed card width */
+    '#panel-admin input,#panel-admin select,#panel-profile input{max-width:100%!important;box-sizing:border-box!important}',
+    '#panel-admin div[style*="grid"]{max-width:100%!important;box-sizing:border-box!important}',
+
+    /* 5) Other flex rows that could stretch */
+    '.blx-pag{flex-wrap:wrap!important;max-width:100%!important}',
+    '.bill-actions{flex-wrap:wrap!important}',
+    '.mgmt-cust-actions{flex-wrap:wrap!important}',
+    '.summary-grid{max-width:100%!important;box-sizing:border-box!important}',
+    '.share-options{max-width:100%!important}',
+
+    /* 6) Sticky bars must not exceed viewport */
+    '.header,.tabs{max-width:100vw!important;box-sizing:border-box!important}',
+
+    /* 7) Modals fit small screens */
+    '.modal-content{max-width:94%!important;box-sizing:border-box!important}',
+    '@media (max-width:359px){ .modal-content{padding:12px!important} }'
+  ].join('');
+  document.head.appendChild(st);
+  console.log('✅ V30 Loaded: screen-fit active');
+})();
+
+/* ==== V30: STOP HORIZONTAL OVERFLOW — fit every screen ==== */
+(function(){
+  var old = document.getElementById('ska-overflow-fix');
+  if (old) old.remove();
+  var st = document.createElement('style');
+  st.id = 'ska-overflow-fix';
+  st.textContent = [
+    /* 1) Hard-lock page width — no sideways panning ever */
+    'html,body{overflow-x:hidden!important;max-width:100vw!important;width:100%!important}',
+    '.header,.tabs,.container,.card,.modal-content{max-width:100vw!important;min-width:0!important}',
+
+    /* 2) Settings submenu: WRAP into rows on small screens (the real culprit) */
+    '.settings-submenu{flex-wrap:wrap!important;gap:4px!important;padding:4px!important;border-bottom:2px solid #e8edf4!important}',
+    '.settings-submenu button{flex:1 1 46%!important;min-width:0!important;white-space:normal!important;word-break:break-word!important;font-size:.72rem!important;padding:9px 4px!important;border-radius:8px!important;border-bottom:2px solid transparent!important}',
+    '.settings-submenu button.active{border-bottom-color:#4f46e5!important;background:rgba(79,70,229,.1)!important}',
+    '@media (min-width:480px){.settings-submenu button{flex:1 1 30%!important;font-size:.8rem!important}}',
+    '@media (min-width:768px){.settings-submenu button{flex:1 1 18%!important;font-size:.9rem!important}}',
+
+    /* 3) Main tabs: allow shrinking so 4 tabs always fit */
+    '.tabs .tab-btn{min-width:0!important;flex:1 1 0!important}',
+    '.tab-btn{overflow:hidden!important}',
+    '.tab-btn .tab-icon{max-width:100%!important}',
+
+    /* 4) Tables scroll INSIDE their wrapper, never stretch the page */
+    '.table-wrap{width:100%!important;max-width:100%!important;overflow-x:auto!important;min-width:0!important}',
+    '.card{min-width:0!important;overflow:visible!important}',
+
+    /* 5) Inputs / grids never exceed screen */
+    'input,select,textarea{max-width:100%!important;min-width:0!important}',
+    '#panel-admin div[style*="grid"],.price-selection,.summary-grid{max-width:100%!important;min-width:0!important}',
+
+    /* 6) Modals fit small screens */
+    '.modal-content{width:94%!important;max-width:94vw!important;box-sizing:border-box!important}',
+    '.modal{overflow-x:hidden!important}'
+  ].join('');
+  document.head.appendChild(st);
+  console.log('✅ V30 Loaded: overflow locked');
+})();
+
+/* ==== V31: ATTRACTIVE SETTINGS SUBMENU — colorful chips with per-tab gradients ==== */
+(function(){
+  var old = document.getElementById('ska-submenu-css');
+  if (old) old.remove();
+  var st = document.createElement('style');
+  st.id = 'ska-submenu-css';
+  st.textContent = [
+    /* Panel container */
+    '.settings-submenu{',
+    'display:flex!important;flex-wrap:wrap!important;gap:8px!important;',
+    'background:linear-gradient(135deg,#eef2ff 0%,#f5f3ff 60%,#fdf4ff 100%)!important;',
+    'border:1.5px solid #e0e7ff!important;border-radius:18px!important;',
+    'padding:10px!important;margin-bottom:16px!important;',
+    'box-shadow:inset 0 2px 8px rgba(79,70,229,.07),0 4px 14px rgba(79,70,229,.08)!important;',
+    'border-bottom:1.5px solid #e0e7ff!important;',
+    '}',
+    /* Chip buttons (inactive) */
+    '.settings-submenu button{',
+    'flex:1 1 30%!important;min-width:30%!important;',
+    'background:#ffffff!important;color:#475569!important;',
+    'border:1.5px solid #dbe3ee!important;border-radius:14px!important;',
+    'padding:11px 6px!important;font-size:.8rem!important;font-weight:800!important;letter-spacing:.2px!important;',
+    'box-shadow:0 2px 6px rgba(15,23,42,.07)!important;',
+    'transition:all .25s ease!important;white-space:normal!important;line-height:1.25!important;',
+    '}',
+    '.settings-submenu button:active{transform:scale(.95)!important}',
+    /* Active chip: default gradient */
+    '.settings-submenu button.active{',
+    'background:linear-gradient(135deg,#4f46e5,#7c3aed)!important;',
+    'color:#ffffff!important;border-color:transparent!important;',
+    'box-shadow:0 6px 18px rgba(79,70,229,.4)!important;',
+    'text-shadow:0 1px 2px rgba(0,0,0,.25)!important;',
+    'transform:translateY(-1px)!important;',
+    '}',
+    /* Per-tab active colours (order: Products, Manual, Profile, Manage Users, Backup) */
+    '.settings-submenu button:nth-child(1).active{background:linear-gradient(135deg,#0ea5e9,#2563eb)!important;box-shadow:0 6px 18px rgba(37,99,235,.4)!important}',
+    '.settings-submenu button:nth-child(2).active{background:linear-gradient(135deg,#f59e0b,#ea580c)!important;box-shadow:0 6px 18px rgba(234,88,12,.4)!important}',
+    '.settings-submenu button:nth-child(3).active{background:linear-gradient(135deg,#10b981,#059669)!important;box-shadow:0 6px 18px rgba(5,150,105,.4)!important}',
+    '.settings-submenu button:nth-child(4).active{background:linear-gradient(135deg,#8b5cf6,#6d28d9)!important;box-shadow:0 6px 18px rgba(109,40,217,.4)!important}',
+    '.settings-submenu button:nth-child(5).active{background:linear-gradient(135deg,#ef4444,#dc2626)!important;box-shadow:0 6px 18px rgba(220,38,38,.4)!important}',
+    /* Small screens: 2 per row, still colorful */
+    '@media (max-width:479px){',
+    '.settings-submenu button{flex:1 1 46%!important;min-width:46%!important;font-size:.74rem!important;padding:10px 4px!important}',
+    '}',
+    '@media (max-width:359px){',
+    '.settings-submenu button{flex:1 1 46%!important;min-width:46%!important;font-size:.68rem!important;padding:9px 2px!important}',
+    '}'
+  ].join('');
+  document.head.appendChild(st);
+  console.log('✅ V31 Loaded: attractive settings submenu');
 })();

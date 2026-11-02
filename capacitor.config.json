@@ -1,5 +1,11 @@
 {
   "appId": "com.skayurvedam.billing",
   "appName": "SKA Billing",
-  "webDir": "src"
+  "webDir": "src",
+  "android": {
+    "webContentsDebuggingEnabled": false
+  },
+  "server": {
+    "androidScheme": "https"
+  }
 }
