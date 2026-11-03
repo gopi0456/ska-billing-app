@@ -30,7 +30,10 @@
         }
       ]
     },
-    "publish": null
+    "publish": null,
+    "extraMetadata": {
+      "name": "ska-billing-desktop"
+    }
   },
   "repository": {
     "type": "git",
