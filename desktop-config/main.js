@@ -12,7 +12,7 @@ function createWindow() {
   });
   
   // Load index.html from the built web assets (../../www relative to desktop-config)
-  win.loadFile(path.join(__dirname, '..', '..', 'www', 'index.html'));
+  const fs = require('fs'); const prodPath = path.join(__dirname, '..', 'dist-web', 'index.html'); const devPath = path.join(__dirname, '..', '..', 'www', 'index.html'); win.loadFile(fs.existsSync(prodPath) ? prodPath : devPath);
 }
 
 app.whenReady().then(createWindow);
