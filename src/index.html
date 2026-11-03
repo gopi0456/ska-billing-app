@@ -135,7 +135,24 @@
 <script src="js/requirement.js"></script>
 <script src="js/settings.js"></script>
 <script>
-const DB={isCapacitor:window.Capacitor!==undefined,sqlite:null,conn:null,data:JSON.parse(localStorage.getItem('ska_db')||'{"customers":[],"products":[],"bills":[],"bill_items":[],"requirements":[],"manual_products":[]}'),async init(){if(this.isCapacitor&&window.CapacitorSQLite){try{this.sqlite=new window.CapacitorSQLite.SQLiteConnection(window.CapacitorSQLite);this.conn=await this.sqlite.createConnection("ska_db",false,"no-encryption",1,false);await this.conn.open();await this.conn.execute(`CREATE TABLE IF NOT EXISTS customers (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, mobile TEXT, customer_type TEXT)`);await this.conn.execute(`CREATE TABLE IF NOT EXISTS products (id INTEGER PRIMARY KEY AUTOINCREMENT, item_name TEXT, mrp REAL, sp REAL, bp REAL)`);await this.conn.execute(`CREATE TABLE IF NOT EXISTS bills (id INTEGER PRIMARY KEY AUTOINCREMENT, bill_number TEXT, customer_id INTEGER, cust_name TEXT, cust_mobile TEXT, customer_type TEXT, date TEXT, total_mrp REAL, total_sp REAL, total_bp REAL, price_columns TEXT, bp_status TEXT, stockist_id TEXT, bp_done_date TEXT, bp_done_remarks TEXT)`);await this.conn.execute(`CREATE TABLE IF NOT EXISTS bill_items (id INTEGER PRIMARY KEY AUTOINCREMENT, bill_id INTEGER, item_name TEXT, mrp REAL, sp REAL, bp REAL, qty INTEGER, tot_mrp REAL, tot_sp REAL, tot_bp REAL)`);await this.conn.execute(`CREATE TABLE IF NOT EXISTS requirements (id INTEGER PRIMARY KEY AUTOINCREMENT, customer TEXT, mobile TEXT, customer_type TEXT, item_name TEXT, qty INTEGER, date TEXT)`);await this.conn.execute(`CREATE TABLE IF NOT EXISTS manual_products (id INTEGER PRIMARY KEY AUTOINCREMENT, item_name TEXT, mrp REAL, sp REAL, bp REAL)`);try{await this.conn.execute(`ALTER TABLE requirements ADD COLUMN customer_type TEXT`)}catch(e){}try{await this.conn.execute(`ALTER TABLE customers ADD COLUMN customer_type TEXT`)}catch(e){}try{await this.conn.execute(`ALTER TABLE bills ADD COLUMN bill_number TEXT`)}catch(e){}try{await this.conn.execute(`ALTER TABLE bills ADD COLUMN bp_status TEXT`)}catch(e){}try{await this.conn.execute(`ALTER TABLE bills ADD COLUMN stockist_id TEXT`)}catch(e){}try{await this.conn.execute(`ALTER TABLE bills ADD COLUMN bp_done_date TEXT`)}catch(e){}try{await this.conn.execute(`ALTER TABLE bills ADD COLUMN bp_done_remarks TEXT`)}catch(e){}try{const eb=await this.conn.query(`SELECT id FROM bills WHERE bill_number IS NULL OR bill_number = ''`);if(eb.values&&eb.values.length>0){for(let i=0;i<eb.values.length;i++){await this.conn.execute(`UPDATE bills SET bill_number = ?, bp_status = COALESCE(bp_status, 'pending') WHERE id = ?`,['SKAA'+String(i+1).padStart(4,'0'),eb.values[i].id])}}await this.conn.execute(`UPDATE bills SET bp_status = 'pending' WHERE bp_status IS NULL OR bp_status = ''`)}catch(e){}}catch(err){this.isCapacitor=false}}else{if(this.data.bills){let c=1;this.data.bills.forEach(b=>{if(!b.bill_number)b.bill_number='SKAA'+String(c++).padStart(4,'0');if(!b.bp_status)b.bp_status='pending'});localStorage.setItem('ska_db',JSON.stringify(this.data))}}if(!this.data.manual_products){this.data.manual_products=[];localStorage.setItem('ska_db',JSON.stringify(this.data))}},async query(t){if(this.isCapacitor&&this.conn){const r=await this.conn.query(`SELECT * FROM ${t}`);return r.values||[]}return this.data[t]||[]},async run(t,item){if(this.isCapacitor&&this.conn){const c=Object.keys(item),v=Object.values(item);if(item.id){try{const check=await this.conn.query(`SELECT id FROM ${t} WHERE id=?`,[item.id]);if(check.values&&check.values.length>0)return item.id}catch(e){}}const r=await this.conn.execute(`INSERT INTO ${t} (${c.join(',')}) VALUES (${c.map(()=>'?').join(',')})`,v);return r.changes.lastId}if(!item.id) if(item.id && this.data[t].find(x => x.id == item.id)) return item.id; if(!item.id) item.id=Date.now()+Math.random();this.data[t].push(item);localStorage.setItem('ska_db',JSON.stringify(this.data));return item.id},async clear(t){if(this.isCapacitor&&this.conn)await this.conn.execute(`DELETE FROM ${t}`);else{this.data[t]=[];localStorage.setItem('ska_db',JSON.stringify(this.data))}},async update(t,id,u){if(this.isCapacitor&&this.conn){const s=Object.keys(u).map(k=>`${k}=?`).join(',');await this.conn.execute(`UPDATE ${t} SET ${s} WHERE id=?`,[...Object.values(u),id])}else{const i=this.data[t].find(i=>i.id==id);if(i)Object.assign(i,u);localStorage.setItem('ska_db',JSON.stringify(this.data))}},async delete(t,id){if(this.isCapacitor&&this.conn)await this.conn.execute(`DELETE FROM ${t} WHERE id=?`,[id]);else{this.data[t]=this.data[t].filter(r=>r.id.toString()!==id.toString());localStorage.setItem('ska_db',JSON.stringify(this.data))}}};
+const DB={isCapacitor:window.Capacitor!==undefined,sqlite:null,conn:null,data:JSON.parse(localStorage.getItem('ska_db')||'{"customers":[],"products":[],"bills":[],"bill_items":[],"requirements":[],"manual_products":[]}'),async init(){if(this.isCapacitor&&window.CapacitorSQLite){try{this.sqlite=new window.CapacitorSQLite.SQLiteConnection(window.CapacitorSQLite);this.conn=await this.sqlite.createConnection("ska_db",false,"no-encryption",1,false);await this.conn.open();await this.conn.execute(`CREATE TABLE IF NOT EXISTS customers (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, mobile TEXT, customer_type TEXT)`);await this.conn.execute(`CREATE TABLE IF NOT EXISTS products (id INTEGER PRIMARY KEY AUTOINCREMENT, item_name TEXT, mrp REAL, sp REAL, bp REAL)`);await this.conn.execute(`CREATE TABLE IF NOT EXISTS bills (id INTEGER PRIMARY KEY AUTOINCREMENT, bill_number TEXT, customer_id INTEGER, cust_name TEXT, cust_mobile TEXT, customer_type TEXT, date TEXT, total_mrp REAL, total_sp REAL, total_bp REAL, price_columns TEXT, bp_status TEXT, stockist_id TEXT, bp_done_date TEXT, bp_done_remarks TEXT)`);await this.conn.execute(`CREATE TABLE IF NOT EXISTS bill_items (id INTEGER PRIMARY KEY AUTOINCREMENT, bill_id INTEGER, item_name TEXT, mrp REAL, sp REAL, bp REAL, qty INTEGER, tot_mrp REAL, tot_sp REAL, tot_bp REAL)`);await this.conn.execute(`CREATE TABLE IF NOT EXISTS requirements (id INTEGER PRIMARY KEY AUTOINCREMENT, customer TEXT, mobile TEXT, customer_type TEXT, item_name TEXT, qty INTEGER, date TEXT)`);await this.conn.execute(`CREATE TABLE IF NOT EXISTS manual_products (id INTEGER PRIMARY KEY AUTOINCREMENT, item_name TEXT, mrp REAL, sp REAL, bp REAL)`);try{await this.conn.execute(`ALTER TABLE requirements ADD COLUMN customer_type TEXT`)}catch(e){}try{await this.conn.execute(`ALTER TABLE customers ADD COLUMN customer_type TEXT`)}catch(e){}try{await this.conn.execute(`ALTER TABLE bills ADD COLUMN bill_number TEXT`)}catch(e){}try{await this.conn.execute(`ALTER TABLE bills ADD COLUMN bp_status TEXT`)}catch(e){}try{await this.conn.execute(`ALTER TABLE bills ADD COLUMN stockist_id TEXT`)}catch(e){}try{await this.conn.execute(`ALTER TABLE bills ADD COLUMN bp_done_date TEXT`)}catch(e){}try{await this.conn.execute(`ALTER TABLE bills ADD COLUMN bp_done_remarks TEXT`)}catch(e){}try{const eb=await this.conn.query(`SELECT id FROM bills WHERE bill_number IS NULL OR bill_number = ''`);if(eb.values&&eb.values.length>0){for(let i=0;i<eb.values.length;i++){await this.conn.execute(`UPDATE bills SET bill_number = ?, bp_status = COALESCE(bp_status, 'pending') WHERE id = ?`,['SKAA'+String(i+1).padStart(4,'0'),eb.values[i].id])}}await this.conn.execute(`UPDATE bills SET bp_status = 'pending' WHERE bp_status IS NULL OR bp_status = ''`)}catch(e){}}catch(err){this.isCapacitor=false}}else{if(this.data.bills){let c=1;this.data.bills.forEach(b=>{if(!b.bill_number)b.bill_number='SKAA'+String(c++).padStart(4,'0');if(!b.bp_status)b.bp_status='pending'});localStorage.setItem('ska_db',JSON.stringify(this.data))}}if(!this.data.manual_products){this.data.manual_products=[];localStorage.setItem('ska_db',JSON.stringify(this.data))}},async query(t){if(this.isCapacitor&&this.conn){const r=await this.conn.query(`SELECT * FROM ${t}`);return r.values||[]}return this.data[t]||[]},async run(t,item){if(this.isCapacitor&&this.conn){const c=Object.keys(item),v=Object.values(item);if(item.id){try{const check=await this.conn.query(`SELECT id FROM ${t} WHERE id=?`,[item.id]);if(check.values&&check.values.length>0)return item.id}catch(e){}}const r=await this.conn.execute(`INSERT INTO ${t} (${c.join(',')}) VALUES (${c.map(()=>'?').join(',')})`,v);return r.changes.lastId}// --- FIXED DUPLICATE CHECK LOGIC ---
+            if (item.id) {
+                const idx = this.data[t].findIndex(x => x.id === item.id);
+                if (idx !== -1) {
+                    // UPDATE existing record (merge new fields into old)
+                    this.data[t][idx] = Object.assign({}, this.data[t][idx], item);
+                } else {
+                    // INSERT with provided ID (rare, but valid for restores)
+                    this.data[t].push(item);
+                }
+                return item.id;
+            } else {
+                // GENERATE NEW ID and INSERT
+                const newId = Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
+                item.id = newId;
+                this.data[t].push(item);
+                return newId;
+            } if(!item.id) item.id=Date.now()+Math.random();this.data[t].push(item);localStorage.setItem('ska_db',JSON.stringify(this.data));return item.id},async clear(t){if(this.isCapacitor&&this.conn)await this.conn.execute(`DELETE FROM ${t}`);else{this.data[t]=[];localStorage.setItem('ska_db',JSON.stringify(this.data))}},async update(t,id,u){if(this.isCapacitor&&this.conn){const s=Object.keys(u).map(k=>`${k}=?`).join(',');await this.conn.execute(`UPDATE ${t} SET ${s} WHERE id=?`,[...Object.values(u),id])}else{const i=this.data[t].find(i=>i.id==id);if(i)Object.assign(i,u);localStorage.setItem('ska_db',JSON.stringify(this.data))}},async delete(t,id){if(this.isCapacitor&&this.conn)await this.conn.execute(`DELETE FROM ${t} WHERE id=?`,[id]);else{this.data[t]=this.data[t].filter(r=>r.id.toString()!==id.toString());localStorage.setItem('ska_db',JSON.stringify(this.data))}}};
 
 async function generateBillNumber(){const bills=await DB.query('bills');let m=0;bills.forEach(b=>{if(b.bill_number&&b.bill_number.startsWith('SKAA')){const n=parseInt(b.bill_number.substring(4));if(!isNaN(n)&&n>m)m=n}});return 'SKAA'+String(m+1).padStart(4,'0')}
 function getBillNum(b){return b.bill_number||('SKAA'+String(b.id).padStart(4,'0'))}
@@ -229,7 +246,7 @@ document.addEventListener('click',function(e){if(e.target===document.getElementB
 async function loadDatalists(){await refreshDropdownCache();setupSearchDropdown('cust-name','cust-list','customers','selectCustomer');setupSearchDropdown('req-cust','cust-list-req','customers','selectReqCustomer');setupSearchDropdown('prod-search','prod-list','products','selectProduct');setupSearchDropdown('req-prod','prod-list-req','products','selectReqProduct');setupSearchDropdown('stockist-id','stockist-id-list','stockists','selectStockistId')}
 
 let cart=[];
-function renderCart(){const m=document.getElementById('show-mrp').checked,s=document.getElementById('show-sp').checked,b=document.getElementById('show-bp').checked;document.getElementById('cart-body').innerHTML=cart.map((i,x)=>{let r=`<tr><td>${i.item_name}${i.qty>1?`<span class="qty-badge">x${i.qty}</span>`:''}</td>`;if(m)r+=`<td>${i.mrp.toFixed(2)}</td>`;if(s)r+=`<td>${i.sp.toFixed(2)}</td>`;if(b)r+=`<td>${i.bp.toFixed(2)}</td>`;r+=`<td><input type="number" value="${i.qty}" min="1" onchange="skaQtyChange(${x},this.value)" style="width:50px"></td>`;if(m)r+=`<td>${(i.mrp*i.qty).toFixed(2)}</td>`;if(s)r+=`<td>${(i.sp*i.qty).toFixed(2)}</td>`;if(b)r+=`<td>${(i.bp*i.qty).toFixed(2)}</td>`;r+=`<td><button class="btn btn-danger" style="width:auto;padding:5px" onclick="cart.splice(${x},1);renderCart()">✕</button></td></tr>`;return r}).join('');let tm=0,ts=0,tb=0;cart.forEach(i=>{tm+=i.mrp*i.qty;ts+=i.sp*i.qty;tb+=i.bp*i.qty});const sg=document.getElementById('summary-grid');sg.innerHTML='';if(m)sg.innerHTML+=`<div class="col-mrp">💲 Total MRP<span>Rs. <span id="tot-mrp">${tm.toFixed(2)}</span></span></div>`;if(s)sg.innerHTML+=`<div class="col-sp">🏷️ Total SP<span>Rs. <span id="tot-sp">${ts.toFixed(2)}</span></span></div>`;if(b)sg.innerHTML+=`<div class="col-bp">💰 Total BP<span><span id="tot-bp">${tb.toFixed(2)}</span> BP</span></div>`}
+function renderCart(){const m=document.getElementById('show-mrp').checked,s=document.getElementById('show-sp').checked,b=document.getElementById('show-bp').checked;document.getElementById('cart-body').innerHTML=cart.map((i,x)=>{let r=`<tr><td>${i.item_name}${i.qty>1?`<span class="qty-badge">x${i.qty}</span>`:''}</td>`;if(m)r+=`<td>${i.mrp.toFixed(2)}</td>`;if(s)r+=`<td>${i.sp.toFixed(2)}</td>`;if(b)r+=`<td>${i.bp.toFixed(2)}</td>`;r+=`<td><input type="number" value="${i.qty}" min="1"  style="width:50px"></td>`;if(m)r+=`<td>${(i.mrp*i.qty).toFixed(2)}</td>`;if(s)r+=`<td>${(i.sp*i.qty).toFixed(2)}</td>`;if(b)r+=`<td>${(i.bp*i.qty).toFixed(2)}</td>`;r+=`<td><button class="btn btn-danger" style="width:auto;padding:5px" onclick="cart.splice(${x},1);renderCart()">✕</button></td></tr>`;return r}).join('');let tm=0,ts=0,tb=0;cart.forEach(i=>{tm+=i.mrp*i.qty;ts+=i.sp*i.qty;tb+=i.bp*i.qty});const sg=document.getElementById('summary-grid');sg.innerHTML='';if(m)sg.innerHTML+=`<div class="col-mrp">💲 Total MRP<span>Rs. <span id="tot-mrp">${tm.toFixed(2)}</span></span></div>`;if(s)sg.innerHTML+=`<div class="col-sp">🏷️ Total SP<span>Rs. <span id="tot-sp">${ts.toFixed(2)}</span></span></div>`;if(b)sg.innerHTML+=`<div class="col-bp">💰 Total BP<span><span id="tot-bp">${tb.toFixed(2)}</span> BP</span></div>`}
 
 
 
@@ -384,5 +401,52 @@ window.addEventListener('load', () => {
     }, 1000);
 });
 </script>
-<script src="js/users.js?v=stable_final"></script></body>
+<script src="js/users.js?v=secure_override_fixed"></script>
+<script>
+// ==== EVENT DELEGATION FOR CART QUANTITY ====
+document.addEventListener('DOMContentLoaded', function() {
+    const cartBody = document.getElementById('cart-body');
+    if (!cartBody) return;
+
+    // Listen for changes on ANY input inside cart-body
+    cartBody.addEventListener('input', function(e) {
+        // Check if the changed element is a quantity input
+        // We assume your inputs have a specific class or we target by type/name
+        // Based on previous code, let's look for inputs within the table rows
+        const target = e.target;
+        
+        // Identify if this is a qty input (adjust selector based on your HTML structure)
+        // Common pattern: <td><input ...></td>
+        if (target.tagName === 'INPUT' && target.closest('tr')) {
+            const tr = target.closest('tr');
+            const idxStr = tr.getAttribute('data-index') || tr.rowIndex - 1; // Fallback to rowIndex
+            const idx = parseInt(idxStr);
+            
+            if (!isNaN(idx)) {
+                // Call the global function safely
+                if (typeof skaQtyChange === 'function') {
+                    skaQtyChange(idx, target.value);
+                } else {
+                    console.warn('skaQtyChange not loaded yet');
+                }
+            }
+        }
+    });
+
+    // Optional: Handle Delete Button Clicks via Delegation too
+    cartBody.addEventListener('click', function(e) {
+        const btn = e.target.closest('.btn-delete-item'); // Assuming you have a class
+        if (btn) {
+            const tr = btn.closest('tr');
+            const idxStr = tr.getAttribute('data-index') || tr.rowIndex - 1;
+            const idx = parseInt(idxStr);
+            if (!isNaN(idx) && typeof removeFromCart === 'function') {
+                removeFromCart(idx);
+            }
+        }
+    });
+});
+</script>
+
+</body>
 </html>

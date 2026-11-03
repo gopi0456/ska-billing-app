@@ -88,3 +88,38 @@ async function generateBillNumber(){
     while(exists[bn]){ next++; bn = 'SKAA' + String(next).padStart(4, '0'); }
     return bn;
 }
+
+
+// ==== ROBUST BILL NUMBER GENERATOR ====
+window.generateBillNumber = function(prefix, dateObj) {
+    const d = dateObj || new Date();
+    const dd = String(d.getDate()).padStart(2, '0');
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const yy = String(d.getFullYear()).slice(-2);
+    
+    // Format: PREFIX-DDMMYY-XXXX
+    const baseStr = `${prefix}-${dd}${mm}${yy}`;
+    
+    let maxSeq = 0;
+    
+    // Scan all existing bills to find highest sequence for this prefix/date combo
+    try {
+        const allBills = DB.query('bills') || [];
+        allBills.forEach(b => {
+            if (b.bill_number && b.bill_number.startsWith(baseStr)) {
+                const parts = b.bill_number.split('-');
+                if (parts.length >= 4) {
+                    const seq = parseInt(parts[3]);
+                    if (!isNaN(seq) && seq > maxSeq) {
+                        maxSeq = seq;
+                    }
+                }
+            }
+        });
+    } catch(e) {
+        console.warn('Error scanning bills for sequence:', e);
+    }
+    
+    const nextSeq = maxSeq + 1;
+    return `${baseStr}-${String(nextSeq).padStart(4, '0')}`;
+};

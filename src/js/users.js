@@ -1437,3 +1437,53 @@ window.parsePDF = async function(f){
   }
   patch(); setInterval(patch, 800);
 })();
+
+
+// ==== V_SECURE_OVERRIDE: Async Safe Admin Login ====
+(function(){
+    const originalAttemptLogin = window.attemptLogin;
+    
+    window.attemptLogin = async function() {
+        var u = gv('login-username').trim();
+        var p = gv('login-password');
+        var err = document.getElementById('login-error');
+        
+        if (!u || !p) {
+            if(err) err.textContent = "Please enter username and password";
+            return;
+        }
+        
+        // Admin Check with SHA256
+        if (u === 'admin') {
+            try {
+                const encoder = new TextEncoder();
+                const data = encoder.encode(p);
+                const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+                const hashArray = Array.from(new Uint8Array(hashBuffer));
+                const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+                
+                if (hashHex === "3f0502f6cc125e8195d019a725362ecfb580fd1d056ea1a7f10fbb2e79454417") {
+                    // SUCCESS LOGIC
+                    var a = { id:0, username:'admin', name:'Administrator', shop_name:'SK AAYURVEDA', subtitle:'KEVA SUPER STOCK POINT', user_type:'admin', bill_prefix:'', bill_from:'', bill_to:'' };
+                    localStorage.setItem('currentUser', JSON.stringify(a));
+                    sessionStorage.setItem('currentUser', JSON.stringify(a));
+                    document.getElementById('login-overlay').style.display = 'none';
+                    applyUserSettings(a);
+                    return;
+                } else {
+                    // FAIL LOGIC
+                    if(err) err.textContent = "Invalid username or password";
+                    document.getElementById('login-password').value='';
+                    return;
+                }
+            } catch(e) {
+                console.error("Auth Error:", e);
+                if(err) err.textContent = "Security check failed.";
+                return;
+            }
+        }
+        
+        // Non-Admin: Fall back to original logic
+        return originalAttemptLogin.call(this);
+    };
+})();
