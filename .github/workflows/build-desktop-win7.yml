@@ -3,14 +3,11 @@ name: Build Windows 7 EXE
 on:
   push:
     branches: [ main ]
-    paths-ignore:
-      - '.github/workflows/build-desktop-win7.yml' # Prevent infinite loop on self-edit
-  workflow_dispatch: # Allow manual trigger
+  workflow_dispatch:
 
 jobs:
   build-win7-exe:
     runs-on: windows-latest
-    
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -20,16 +17,22 @@ jobs:
         with:
           node-version: '18'
 
+      - name: Prepare Web Assets INTO desktop-config/dist-web
+        shell: bash
+        run: |
+          mkdir -p desktop-config/dist-web
+          if [ -d android/app/src/main/assets/public ]; then
+            cp -r android/app/src/main/assets/public/* desktop-config/dist-web/
+          elif [ -d src ]; then
+            cp -r src/* desktop-config/dist-web/
+          fi
+          echo "---- dist-web contents ----"
+          ls -la desktop-config/dist-web
+          test -f desktop-config/dist-web/index.html || { echo "FATAL: index.html missing in dist-web"; exit 1; }
+
       - name: Install Dependencies
         working-directory: ./desktop-config
         run: npm install
-
-      - name: Prepare Web Assets
-        # Ensure the 'www' folder exists for the builder to find
-        run: |
-          mkdir -p www
-          cp -r android/app/src/main/assets/public/* www/ || echo "Warning: Could not copy assets, checking if www already exists..."
-        shell: bash
 
       - name: Build Electron App (IA32 for Win7)
         working-directory: ./desktop-config
@@ -41,5 +44,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: SKA-Billing-Win7-Portable
-          path: ./dist-desktop/*.exe
+          path: dist-desktop/*.exe
           retention-days: 30
