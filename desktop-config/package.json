@@ -4,7 +4,7 @@
   "description": "SK Aayurveda Billing Desktop Client (Win7 Compatible)",
   "main": "main.js",
   "scripts": {
-    "build:win7": "electron-builder --win portable --ia32"
+    "build:win7": "electron-builder --win --ia32"
   },
   "devDependencies": {
     "electron": "22.3.27",
@@ -19,12 +19,13 @@
     "files": [
       "main.js",
       "desktop.css",
-      "dist-web/**/*"
+      "dist-web/**/*",
+      "build/**/*"
     ],
     "win": {
       "target": [
         {
-          "target": "portable",
+          "target": "nsis",
           "arch": [
             "ia32"
           ]
@@ -34,6 +35,15 @@
     "publish": null,
     "extraMetadata": {
       "name": "ska-billing-desktop"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": true,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "SK Aayurveda Billing",
+      "artifactName": "SKA-Billing-Setup-${version}.exe"
     }
   },
   "repository": {
