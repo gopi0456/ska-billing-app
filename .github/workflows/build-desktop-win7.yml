@@ -28,16 +28,11 @@ jobs:
           fi
           test -f desktop-config/dist-web/index.html || { echo "FATAL: index.html missing"; exit 1; }
 
-      - name: Prepare App Icon (auto-detect 256px+ PNG)
-        shell: bash
-        run: |
-          node -e "const fs=require('fs'),p=require('path');let best=null,bs=-1;(function w(d){try{for(const f of fs.readdirSync(d)){const fp=p.join(d,f);const st=fs.statSync(fp);if(st.isDirectory()){if(!/node_modules|\.git|dist/.test(fp))w(fp);}else if(/\.png$/i.test(f)&&st.size>bs){const b=fs.readFileSync(fp);if(b.length>24&&b.readUInt32BE(0)===0x89504e47&&b.readUInt32BE(16)>=256&&b.readUInt32BE(20)>=256){best=fp;bs=st.size;}}}}catch(e){}})('src');if(best){fs.mkdirSync('desktop-config/build',{recursive:true});fs.copyFileSync(best,'desktop-config/build/icon.png');const pj=p.join('desktop-config','package.json');const j=JSON.parse(fs.readFileSync(pj,'utf8'));j.build=j.build||{};j.build.win=j.build.win||{};j.build.win.icon='build/icon.png';fs.writeFileSync(pj,JSON.stringify(j,null,2));console.log('ICON USED:',best);}else{console.log('NO 256px PNG FOUND - default icon will be used');}"
-
       - name: Install Dependencies
         working-directory: ./desktop-config
         run: npm install
 
-      - name: Build NSIS Installer (Win7, IA32)
+      - name: Build NSIS Installer + Portable (Win7, IA32)
         working-directory: ./desktop-config
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
