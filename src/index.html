@@ -130,10 +130,10 @@
 <div id="share-modal" class="modal"><div class="modal-content"><span class="modal-close" onclick="closeShareModal()">&times;</span><h3>📤 Share Bill</h3><p id="share-cust-info" style="text-align:center;color:#666;margin:8px 0;"></p><div class="share-options"><button class="btn btn-whatsapp" onclick="shareViaWhatsApp()"><span class="btn-icon">📱</span> WhatsApp</button><button class="btn btn-sms" onclick="shareViaSMS()"><span class="btn-icon">💬</span> SMS</button><button class="btn btn-pdf" onclick="shareViaPDF()"><span class="btn-icon">📄</span> PDF Invoice</button></div></div></div>
 <div id="edit-modal" class="modal"><div class="modal-content"><span class="modal-close" onclick="closeEditModal()">&times;</span><h3>✏️ Edit Bill</h3><div id="edit-bill-content"></div></div></div>
 <div id="add-cust-modal" class="modal"><div class="modal-content"><span class="modal-close" onclick="closeAddCustomerModal()">&times;</span><h3>➕ Add New Customer</h3><div id="add-cust-content"></div></div></div><div id="cust-edit-modal" class="modal"><div class="modal-content"><span class="modal-close" onclick="closeCustEditModal()">&times;</span><h3>✏️ Edit Customer</h3><div id="cust-edit-content"></div></div></div><div id="view-bill-modal" class="modal"><div class="modal-content"><span class="modal-close" onclick="closeViewBillModal()">&times;</span><div id="view-bill-content"></div></div></div>
-<script src="js/billing.js"></script>
-<script src="js/history.js"></script>
-<script src="js/requirement.js"></script>
-<script src="js/settings.js"></script>
+<script src="js/billing.js?v=105"></script>
+<script src="js/history.js?v=105"></script>
+<script src="js/requirement.js?v=105"></script>
+<script src="js/settings.js?v=105"></script>
 <script>
 const DB={isCapacitor:window.Capacitor!==undefined,sqlite:null,conn:null,data:JSON.parse(localStorage.getItem('ska_db')||'{"customers":[],"products":[],"bills":[],"bill_items":[],"requirements":[],"manual_products":[]}'),async init(){if(this.isCapacitor&&window.CapacitorSQLite){try{this.sqlite=new window.CapacitorSQLite.SQLiteConnection(window.CapacitorSQLite);this.conn=await this.sqlite.createConnection("ska_db",false,"no-encryption",1,false);await this.conn.open();await this.conn.execute(`CREATE TABLE IF NOT EXISTS customers (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, mobile TEXT, customer_type TEXT)`);await this.conn.execute(`CREATE TABLE IF NOT EXISTS products (id INTEGER PRIMARY KEY AUTOINCREMENT, item_name TEXT, mrp REAL, sp REAL, bp REAL)`);await this.conn.execute(`CREATE TABLE IF NOT EXISTS bills (id INTEGER PRIMARY KEY AUTOINCREMENT, bill_number TEXT, customer_id INTEGER, cust_name TEXT, cust_mobile TEXT, customer_type TEXT, date TEXT, total_mrp REAL, total_sp REAL, total_bp REAL, price_columns TEXT, bp_status TEXT, stockist_id TEXT, bp_done_date TEXT, bp_done_remarks TEXT)`);await this.conn.execute(`CREATE TABLE IF NOT EXISTS bill_items (id INTEGER PRIMARY KEY AUTOINCREMENT, bill_id INTEGER, item_name TEXT, mrp REAL, sp REAL, bp REAL, qty INTEGER, tot_mrp REAL, tot_sp REAL, tot_bp REAL)`);await this.conn.execute(`CREATE TABLE IF NOT EXISTS requirements (id INTEGER PRIMARY KEY AUTOINCREMENT, customer TEXT, mobile TEXT, customer_type TEXT, item_name TEXT, qty INTEGER, date TEXT)`);await this.conn.execute(`CREATE TABLE IF NOT EXISTS manual_products (id INTEGER PRIMARY KEY AUTOINCREMENT, item_name TEXT, mrp REAL, sp REAL, bp REAL)`);try{await this.conn.execute(`ALTER TABLE requirements ADD COLUMN customer_type TEXT`)}catch(e){}try{await this.conn.execute(`ALTER TABLE customers ADD COLUMN customer_type TEXT`)}catch(e){}try{await this.conn.execute(`ALTER TABLE bills ADD COLUMN bill_number TEXT`)}catch(e){}try{await this.conn.execute(`ALTER TABLE bills ADD COLUMN bp_status TEXT`)}catch(e){}try{await this.conn.execute(`ALTER TABLE bills ADD COLUMN stockist_id TEXT`)}catch(e){}try{await this.conn.execute(`ALTER TABLE bills ADD COLUMN bp_done_date TEXT`)}catch(e){}try{await this.conn.execute(`ALTER TABLE bills ADD COLUMN bp_done_remarks TEXT`)}catch(e){}try{const eb=await this.conn.query(`SELECT id FROM bills WHERE bill_number IS NULL OR bill_number = ''`);if(eb.values&&eb.values.length>0){for(let i=0;i<eb.values.length;i++){await this.conn.execute(`UPDATE bills SET bill_number = ?, bp_status = COALESCE(bp_status, 'pending') WHERE id = ?`,['SKAA'+String(i+1).padStart(4,'0'),eb.values[i].id])}}await this.conn.execute(`UPDATE bills SET bp_status = 'pending' WHERE bp_status IS NULL OR bp_status = ''`)}catch(e){}}catch(err){this.isCapacitor=false}}else{if(this.data.bills){let c=1;this.data.bills.forEach(b=>{if(!b.bill_number)b.bill_number='SKAA'+String(c++).padStart(4,'0');if(!b.bp_status)b.bp_status='pending'});localStorage.setItem('ska_db',JSON.stringify(this.data))}}if(!this.data.manual_products){this.data.manual_products=[];localStorage.setItem('ska_db',JSON.stringify(this.data))}},async query(t){if(this.isCapacitor&&this.conn){const r=await this.conn.query(`SELECT * FROM ${t}`);return r.values||[]}return this.data[t]||[]},async run(t,item){if(this.isCapacitor&&this.conn){const c=Object.keys(item),v=Object.values(item);if(item.id){try{const check=await this.conn.query(`SELECT id FROM ${t} WHERE id=?`,[item.id]);if(check.values&&check.values.length>0)return item.id}catch(e){}}const r=await this.conn.execute(`INSERT INTO ${t} (${c.join(',')}) VALUES (${c.map(()=>'?').join(',')})`,v);return r.changes.lastId}// --- FIXED DUPLICATE CHECK LOGIC ---
             if (item.id) {
@@ -148,7 +148,7 @@ const DB={isCapacitor:window.Capacitor!==undefined,sqlite:null,conn:null,data:JS
                 return item.id;
             } else {
                 // GENERATE NEW ID and INSERT
-                const newId = Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
+                const newId = Date.now() * 1000 + ((this._idSeq = (this._idSeq || 0) + 1) % 1000);
                 item.id = newId;
                 this.data[t].push(item);
                 return newId;
@@ -401,7 +401,7 @@ window.addEventListener('load', () => {
     }, 1000);
 });
 </script>
-<script src="js/users.js?v=secure_override_fixed"></script>
+<script src="js/users.js?v=105"></script>
 <script>
 // ==== EVENT DELEGATION FOR CART QUANTITY ====
 document.addEventListener('DOMContentLoaded', function() {
@@ -446,6 +446,292 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 });
+</script>
+
+
+<script>
+/* SKA_QTY_FOCUS_GUARD_v1 */
+(function(){
+  function install(){
+    var cur = window.skaQtyChange;
+    if (!cur || cur.__skaSafe) return;      // already wrapped
+    var orig = cur;                          // users.js version (does renderCart)
+
+    // SAFE version: updates data ONLY, never re-renders -> cursor stays put
+    var safe = function(i, v){
+      if (window.cart && cart[i]) cart[i].qty = parseFloat(v) || 0;
+    };
+    safe.__skaSafe = true;
+    safe.__orig = orig;
+    window.skaQtyChange = safe;
+
+    // Commit on CHANGE (blur / Enter / spinner) -> full update like original app
+    var cb = document.getElementById('cart-body');
+    if (cb && !cb.__skaChangeBound) {
+      cb.__skaChangeBound = true;
+      cb.addEventListener('change', function(e){
+        var t = e.target;
+        if (t && t.tagName === 'INPUT' && t.closest && t.closest('tr')) {
+          var tr = t.closest('tr');
+          var idx = parseInt(tr.getAttribute('data-index') || (tr.rowIndex - 1), 10);
+          if (!isNaN(idx)) {
+            var fn = (window.skaQtyChange && window.skaQtyChange.__orig) || orig;
+            fn(idx, t.value);
+          }
+        }
+      });
+    }
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', install);
+  } else { install(); }
+  window.addEventListener('load', install);   // re-wrap if users.js loads late
+})();
+</script>
+
+
+<script>
+/* SKA_BILL_ID_MIGRATION_v1 */
+(function(){
+  function migrate(){
+    try {
+      if (!window.DB || !DB.data || !DB.data.bills) return false;
+      var map = {};
+      DB.data.bills.forEach(function(b){
+        if (typeof b.id !== 'number' || !isFinite(b.id)) {
+          var old = b.id;
+          var nid = Date.now() * 1000 + ((DB._idSeq = (DB._idSeq || 0) + 1) % 1000);
+          map[old] = nid;
+          b.id = nid;
+        }
+      });
+      var count = Object.keys(map).length;
+      if (count) {
+        // Update any references to old IDs in OTHER tables (payments, logs, etc.)
+        Object.keys(DB.data).forEach(function(t){
+          if (t === 'bills' || !Array.isArray(DB.data[t])) return;
+          DB.data[t].forEach(function(row){
+            Object.keys(row).forEach(function(k){
+              if (map[row[k]] !== undefined) row[k] = map[row[k]];
+            });
+          });
+        });
+        if (typeof DB.save === 'function') DB.save();
+        else if (typeof DB.persist === 'function') DB.persist();
+        console.log('✅ Migrated ' + count + ' bill ID(s) to numeric format.');
+      }
+      return true;
+    } catch(e) { console.warn('Migration skipped:', e); return false; }
+  }
+  // Retry until DB is ready (max ~10 tries)
+  var tries = 0;
+  var iv = setInterval(function(){
+    tries++;
+    if (migrate() || tries > 10) clearInterval(iv);
+  }, 500);
+  window.addEventListener('load', function(){ migrate(); });
+})();
+</script>
+
+
+
+
+
+<script>
+/* SKA_COMMENT_FIX_v4 */
+(function(){
+  var KEY='__skaCommentFixV4';
+  var STAMPS=['__skaPatched','__skaUnit','__skaComment','__skaStats','__skaStats2','__skaClean','__skaBoth','__skaLeaf','__skaUnitComment','__skaUnitPdf','__skaTextPatched'];
+  function ta(){
+    var t=document.querySelector('#billing textarea');
+    if(t)return t;
+    var all=document.querySelectorAll('textarea');
+    for(var i=0;i<all.length;i++){if(/comment|remark/i.test(all[i].placeholder||''))return all[i];}
+    return null;
+  }
+  function persist(){try{if(typeof DB.save==='function')DB.save();else if(typeof DB.persist==='function')DB.persist();}catch(e){}}
+  function copyStamps(s,d){STAMPS.forEach(function(k){if(s&&s[k])d[k]=true;});}
+
+  /* 1) DB.run injector: stamps comment onto every new bill (retry until DB ready) */
+  function installRun(){
+    if(!window.DB||typeof DB.run!=='function'||DB[KEY+'Run'])return;
+    var orig=DB.run.bind(DB);
+    DB.run=function(table,item){
+      var pend=window.__skaPendingComment;
+      var isBill=(table==='bills')&&item&&typeof item==='object';
+      if(isBill&&pend&&!item.comments)item.comments=pend;
+      return orig(table,item);
+    };
+    DB[KEY+'Run']=true;
+  }
+
+  /* 2) saveBill wrapper: sets pending flag + fallback direct update */
+  function installSave(){
+    if(!window.saveBill||window.saveBill[KEY])return;
+    var orig=window.saveBill;
+    var w=async function(){
+      var t=ta();var txt=t?String(t.value||'').trim():'';
+      window.__skaPendingComment=txt;
+      var before=[];try{before=(await DB.query('bills')).map(function(b){return String(b.id);});}catch(e){}
+      var r;
+      try{r=await orig.apply(this,arguments);}
+      finally{
+        try{
+          if(txt){
+            var after=await DB.query('bills'),nb=null;
+            for(var i=0;i<after.length;i++){if(before.indexOf(String(after[i].id))===-1)nb=after[i];}
+            if(nb&&!String(nb.comments||'').trim()){await DB.update('bills',nb.id,{comments:txt});persist();}
+          }
+          if(t)t.value='';
+        }catch(e){}
+        window.__skaPendingComment='';
+      }
+      return r;
+    };
+    copyStamps(orig,w);w.__skaUnit=true;w.__skaStats=true;w.__skaComment=true;w[KEY]=true;
+    window.saveBill=w;
+  }
+
+  /* 3) Bill number: max+1 => deleted latest number gets reused */
+  function installGen(){
+    if(!window.generateBillNumber||window.generateBillNumber[KEY])return;
+    var orig=window.generateBillNumber;
+    var g=async function(){
+      var cur=null;try{cur=curUser();}catch(e){}
+      var prefix=(cur&&cur.bill_prefix)||'';
+      var bills=[];try{bills=await DB.query('bills');}catch(e){}
+      var max=0;
+      bills.forEach(function(b){
+        var s=String(b.bill_number||'');
+        if(prefix&&s.indexOf(prefix)!==0)return;
+        var m=s.slice(prefix.length).match(/^(\d+)$/);
+        if(m){var n=parseInt(m[1],10);if(n>max)max=n;}
+      });
+      var next=max+1;
+      if(cur&&cur.user_type!=='admin'){
+        var from=parseInt(cur.bill_from,10),to=parseInt(cur.bill_to,10);
+        if(!isNaN(from)&&!isNaN(to)){
+          if(next<from)next=from;
+          if(next>to){alert('\u26a0\ufe0f Bill number range finished.\nAllowed: '+from+' to '+to+'.\nPlease contact admin to increase the range.');return null;}
+        }
+      }
+      return prefix+String(next).padStart(4,'0');
+    };
+    copyStamps(orig,g);g.__skaPatched=true;g[KEY]=true;
+    window.generateBillNumber=g;
+  }
+
+  /* 4) View / Edit display of comments */
+  function visibleModalContent(){
+    var ms=document.querySelectorAll('.modal');
+    for(var i=0;i<ms.length;i++){var st=getComputedStyle(ms[i]);if(st.display!=='none'&&st.visibility!=='hidden'){var mc=ms[i].querySelector('.modal-content');if(mc)return mc;}}
+    return null;
+  }
+  function showComment(mc,text,id){
+    if(!mc||!text)return;
+    var old=document.getElementById(id);if(old)old.remove();
+    if(mc.textContent.indexOf(text)!==-1)return;
+    var d=document.createElement('div');d.id=id;
+    d.style.cssText='margin:10px 0;padding:10px 12px;background:#fffbeb;border:1.5px dashed #f59e0b;border-radius:10px;font-size:.9rem;color:#92400e;white-space:pre-wrap;';
+    d.textContent='\u{1F4DD} Note: '+text;
+    mc.appendChild(d);
+  }
+  async function findBill(id){
+    try{var bs=await DB.query('bills');return bs.find(function(x){return String(x.id)===String(id);})||null;}catch(e){}
+    return null;
+  }
+  function installView(){
+    if(!window.viewBillDetails||window.viewBillDetails[KEY])return;
+    var ov=window.viewBillDetails;
+    var wv=async function(id){
+      var r=await ov.apply(this,arguments);
+      try{var b=await findBill(id);if(b&&String(b.comments||'').trim()){setTimeout(function(){showComment(visibleModalContent(),String(b.comments).trim(),'ska-view-comment-fix');},200);}}catch(e){}
+      return r;
+    };
+    copyStamps(ov,wv);wv[KEY]=true;window.viewBillDetails=wv;
+  }
+  function installEdit(){
+    if(!window.openEditModal||window.openEditModal[KEY])return;
+    var oe=window.openEditModal;
+    var we=async function(id){
+      var r=await oe.apply(this,arguments);
+      try{
+        window.__skaEditBillId=id;
+        var b=await findBill(id);
+        if(b&&String(b.comments||'').trim()){setTimeout(function(){showComment(visibleModalContent(),String(b.comments).trim(),'ska-edit-comment-fix');},200);}
+      }catch(e){}
+      return r;
+    };
+    copyStamps(oe,we);we[KEY]=true;window.openEditModal=we;
+  }
+  function installEditSave(){
+    ['saveEditedBill','saveEditBill','updateEditedBill','saveBillChanges'].forEach(function(fn){
+      if(window[fn]&&!window[fn][KEY]){
+        var o=window[fn];
+        var w=async function(){
+          var mc=visibleModalContent();
+          var t=mc?mc.querySelector('textarea'):null;
+          var txt=t?String(t.value||'').trim():'';
+          var r=await o.apply(this,arguments);
+          try{var id=window.__skaEditBillId;if(id&&txt){await DB.update('bills',id,{comments:txt});persist();}}catch(e){}
+          return r;
+        };
+        copyStamps(o,w);w[KEY]=true;window[fn]=w;
+      }
+    });
+  }
+  function installAll(){installRun();installSave();installGen();installView();installEdit();installEditSave();}
+  installAll();
+  setInterval(installAll,600);
+})();
+</script>
+
+
+<script>
+/* SKA_BILLNUM_FIX_v5 */
+(function(){
+  function installGen5(){
+    if(!window.generateBillNumber || window.generateBillNumber.__skaBillNumV5) return;
+    var orig = window.generateBillNumber;
+    var g = async function(){
+      var cur=null; try{ cur=curUser(); }catch(e){}
+      var bills=[]; try{ bills=await DB.query('bills'); }catch(e){}
+      // Parse every bill number into {prefix, num, width}
+      var list=[];
+      bills.forEach(function(b){
+        var s=String(b.bill_number||'').trim();
+        var m=s.match(/^(.*?)(\d+)$/);
+        if(m) list.push({p:m[1], n:parseInt(m[2],10), w:m[2].length});
+      });
+      var curPref=(cur&&cur.bill_prefix)||'';
+      var cand=list;
+      if(curPref){
+        var f=list.filter(function(x){return x.p.toLowerCase()===curPref.toLowerCase();});
+        if(f.length) cand=f;
+      }
+      var max=0, pref=curPref, width=4;
+      cand.forEach(function(x){
+        if(x.n>max){ max=x.n; width=Math.max(x.w,4); if(!pref) pref=x.p; }
+      });
+      if(!pref && cand.length) pref=cand[cand.length-1].p;
+      var next=max+1;
+      // Range enforcement for non-admin users
+      if(cur && cur.user_type!=='admin'){
+        var from=parseInt(cur.bill_from,10), to=parseInt(cur.bill_to,10);
+        if(!isNaN(from)&&!isNaN(to)){
+          if(next<from) next=from;
+          if(next>to){ alert('\u26a0\ufe0f Bill number range finished.\nAllowed: '+from+' to '+to+'.\nPlease contact admin to increase the range.'); return null; }
+        }
+      }
+      return pref + String(next).padStart(width,'0');
+    };
+    ['__skaPatched','__skaUnit','__skaComment','__skaStats'].forEach(function(k){ if(orig[k]) g[k]=true; });
+    g.__skaPatched=true; g.__skaBillNumV5=true;
+    window.generateBillNumber=g;
+  }
+  installGen5();
+  setInterval(installGen5,600);
+})();
 </script>
 
 </body>
