@@ -18,6 +18,7 @@
     },
     "files": [
       "main.js",
+      "desktop.css",
       "dist-web/**/*"
     ],
     "win": {
