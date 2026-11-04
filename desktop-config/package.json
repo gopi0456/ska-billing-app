@@ -43,12 +43,13 @@
     },
     "nsis": {
       "oneClick": false,
-      "perMachine": true,
+      "perMachine": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "shortcutName": "SK Aayurveda Billing",
-      "artifactName": "SKA-Billing-Setup-${version}.exe"
+      "artifactName": "SKA-Billing-Setup-${version}.exe",
+      "deleteAppDataOnUninstall": false
     }
   },
   "repository": {
