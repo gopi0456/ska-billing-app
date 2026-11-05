@@ -3,17 +3,19 @@ const path = require('path');
 const fs = require('fs');
 
 /* 
-  FIX FOR PORTABLE APP DATA LOSS: 
-  Force BOTH userData and sessionData (localStorage) to save permanently.
+  FIX FOR DATA LOSS: 
+  Saves data in a "SKA-Billing-Data" folder next to the app.
+  If installed via Setup, saves to AppData.
 */
-const isPortable = !!process.env.PORTABLE_EXECUTABLE_DIR;
-const dataPath = isPortable 
-  ? path.join(process.env.PORTABLE_EXECUTABLE_DIR, 'SKA-Billing-Data') 
+const isPackaged = app.isPackaged;
+const exeDir = path.dirname(app.getPath('exe'));
+const dataPath = isPackaged 
+  ? path.join(exeDir, 'SKA-Billing-Data') 
   : path.join(app.getPath('appData'), 'SKA-Billing-Data');
 
-// Set the data paths BEFORE app is ready
+// Force Electron to save ALL data (localStorage, cookies, etc.) in this folder
 app.setPath('userData', dataPath);
-app.setPath('sessionData', dataPath); // This is the magic line for localStorage
+app.setPath('sessionData', dataPath);
 
 process.on('uncaughtException', function(e){
   try { dialog.showErrorBox('SK Aayurveda Billing - Error', String((e && e.stack) || e)); } catch(_) {}
@@ -49,9 +51,7 @@ function createWindow() {
     webPreferences: { 
       nodeIntegration: true, 
       contextIsolation: false, 
-      webSecurity: false,
-      // Ensure the session partition uses the default (which we redirected above)
-      partition: 'persist:main'
+      webSecurity: false 
     },
     show: false
   });
