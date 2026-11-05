@@ -7,12 +7,13 @@
     "build:win7": "electron-builder --win --ia32"
   },
   "devDependencies": {
-    "electron": "22.3.27",
-    "electron-builder": "^24.9.1"
+    "electron": "21.4.4",
+    "electron-builder": "23.6.0"
   },
   "build": {
     "appId": "org.keva.ska.billing.desktop",
     "productName": "SK Aayurveda Billing",
+    "asar": false,
     "directories": {
       "output": "../dist-desktop"
     },
@@ -28,19 +29,10 @@
           "arch": [
             "ia32"
           ]
-        },
-        {
-          "target": "portable",
-          "arch": [
-            "ia32"
-          ]
         }
       ]
     },
     "publish": null,
-    "extraMetadata": {
-      "name": "ska-billing-desktop"
-    },
     "nsis": {
       "oneClick": false,
       "perMachine": false,
