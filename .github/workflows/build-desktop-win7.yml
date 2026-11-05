@@ -1,4 +1,4 @@
-name: Build Windows 7 Installer
+name: Build Windows 7 Installer & ZIP
 
 on:
   push:
@@ -45,7 +45,7 @@ jobs:
             Remove-Item "$cacheDir\winCodeSign.7z"
           }
 
-      - name: Build NSIS Installer (Win7, IA32)
+      - name: Build NSIS Installer & ZIP
         working-directory: ./desktop-config
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -56,7 +56,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: SKA-Billing-Win7-Setup
-          path: dist-desktop/*.exe
+          name: SKA-Billing-Win7-Build
+          path: dist-desktop/
           retention-days: 30
           if-no-files-found: warn
