@@ -6,17 +6,14 @@ process.on('uncaughtException', function(e){
   try { dialog.showErrorBox('SK Aayurveda Billing - Error', String((e && e.stack) || e)); } catch(_) {}
 });
 
-/* Legacy Windows 7 safety switches (fix 0xc0000005 on old GPU/AV stacks) */
+/* Legacy Windows 7 safety switches (fix 0xc0000005 and ffmpeg errors) */
 app.commandLine.appendSwitch('no-sandbox');
 app.commandLine.appendSwitch('disable-gpu');
+app.commandLine.appendSwitch('disable-software-rasterizer');
 app.commandLine.appendSwitch('disable-web-security');
 app.commandLine.appendSwitch('allow-file-access-from-files');
 
-/* 
-  FIX FOR PORTABLE APP DATA LOSS:
-  Force Electron to save user data (localStorage, IndexedDB, cookies) 
-  in a fixed location in the AppData folder, NOT the temporary extraction folder.
-*/
+/* FIX FOR DATA LOSS: Force Electron to save user data in AppData */
 const userDataPath = path.join(app.getPath('appData'), 'SKA-Billing-Data');
 app.setPath('userData', userDataPath);
 
@@ -25,8 +22,8 @@ let win = null;
 function findIndex() {
   const candidates = [
     path.join(__dirname, 'dist-web', 'index.html'),
-    path.join(process.resourcesPath || '', 'app.asar', 'dist-web', 'index.html'),
     path.join(process.resourcesPath || '', 'app', 'dist-web', 'index.html'),
+    path.join(process.resourcesPath || '', 'dist-web', 'index.html'),
     path.join(__dirname, '..', 'dist-web', 'index.html')
   ];
   for (const c of candidates) {
@@ -43,12 +40,14 @@ function createWindow() {
     webPreferences: { nodeIntegration: true, contextIsolation: false, webSecurity: false },
     show: false
   });
+  
   const indexPath = findIndex();
   if (!indexPath) {
     dialog.showErrorBox('App Load Error', 'Could not find index.html. Please reinstall.');
     app.quit();
     return;
   }
+  
   win.loadFile(indexPath);
   win.once('ready-to-show', function(){ win.show(); });
   win.on('closed', function(){ win = null; });
