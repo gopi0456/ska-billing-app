@@ -20,9 +20,16 @@
     "files": [
       "main.js",
       "desktop.css",
+      "app.manifest",
       "dist-web/**/*"
     ],
     "win": {
+      "extraResources": [
+        {
+          "from": "app.manifest",
+          "to": "app.manifest"
+        }
+      ],
       "target": [
         {
           "target": "nsis",
