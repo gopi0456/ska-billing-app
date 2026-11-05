@@ -45,7 +45,7 @@ jobs:
             Remove-Item "$cacheDir\winCodeSign.7z"
           }
 
-      - name: Build NSIS Installer + Portable (Win7, IA32)
+      - name: Build NSIS Installer (Win7, IA32)
         working-directory: ./desktop-config
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
