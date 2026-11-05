@@ -4,15 +4,16 @@ const fs = require('fs');
 
 /* 
   FIX FOR PORTABLE APP DATA LOSS: 
-  If running the Portable .exe, save data in a "SKA-Billing-Data" folder 
-  right next to the .exe file instead of a temporary folder.
+  Force BOTH userData and sessionData (localStorage) to save permanently.
 */
-if (process.env.PORTABLE_EXECUTABLE_DIR) {
-  app.setPath('userData', path.join(process.env.PORTABLE_EXECUTABLE_DIR, 'SKA-Billing-Data'));
-} else {
-  // If running the installed version, save to standard AppData
-  app.setPath('userData', path.join(app.getPath('appData'), 'SKA-Billing-Data'));
-}
+const isPortable = !!process.env.PORTABLE_EXECUTABLE_DIR;
+const dataPath = isPortable 
+  ? path.join(process.env.PORTABLE_EXECUTABLE_DIR, 'SKA-Billing-Data') 
+  : path.join(app.getPath('appData'), 'SKA-Billing-Data');
+
+// Set the data paths BEFORE app is ready
+app.setPath('userData', dataPath);
+app.setPath('sessionData', dataPath); // This is the magic line for localStorage
 
 process.on('uncaughtException', function(e){
   try { dialog.showErrorBox('SK Aayurveda Billing - Error', String((e && e.stack) || e)); } catch(_) {}
@@ -45,7 +46,13 @@ function createWindow() {
     width: 1100,
     height: 780,
     center: true,
-    webPreferences: { nodeIntegration: true, contextIsolation: false, webSecurity: false },
+    webPreferences: { 
+      nodeIntegration: true, 
+      contextIsolation: false, 
+      webSecurity: false,
+      // Ensure the session partition uses the default (which we redirected above)
+      partition: 'persist:main'
+    },
     show: false
   });
   
