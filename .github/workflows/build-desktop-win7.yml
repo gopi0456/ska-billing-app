@@ -1,3 +1,37 @@
+name: Build Windows 7 Installer
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build-win7-exe:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Prepare Web Assets
+        shell: bash
+        run: |
+          mkdir -p desktop-config/dist-web
+          if [ -d android/app/src/main/assets/public ]; then
+            cp -r android/app/src/main/assets/public/* desktop-config/dist-web/
+          elif [ -d src ]; then
+            cp -r src/* desktop-config/dist-web/
+          fi
+          test -f desktop-config/dist-web/index.html || { echo "FATAL: index.html missing"; exit 1; }
+
+      - name: Install Dependencies
+        working-directory: ./desktop-config
+        run: npm install
+
       - name: Pre-cache winCodeSign (fix symlink issue)
         shell: pwsh
         run: |
@@ -7,7 +41,6 @@
             New-Item -ItemType Directory -Force -Path $cacheDir | Out-Null
             $url = "https://github.com/electron-userland/electron-builder-binaries/releases/download/winCodeSign-2.6.0/winCodeSign-2.6.0.7z"
             Invoke-WebRequest -Uri $url -OutFile "$cacheDir\winCodeSign.7z"
-            # Use 7-Zip that comes with the runner
             7z x "$cacheDir\winCodeSign.7z" -o"$targetDir" -y
             Remove-Item "$cacheDir\winCodeSign.7z"
           }
@@ -16,4 +49,14 @@
         working-directory: ./desktop-config
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
         run: npm run build:win7
+
+      - name: Upload Artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: SKA-Billing-Win7-Setup
+          path: dist-desktop/*.exe
+          retention-days: 30
+          if-no-files-found: warn
