@@ -5,15 +5,13 @@ const fs = require('fs');
 /* 
   FIX FOR DATA LOSS: 
   Saves data in a "SKA-Billing-Data" folder next to the app.
-  If installed via Setup, saves to AppData.
 */
-const isPackaged = app.isPackaged;
 const exeDir = path.dirname(app.getPath('exe'));
-const dataPath = isPackaged 
+const dataPath = app.isPackaged 
   ? path.join(exeDir, 'SKA-Billing-Data') 
   : path.join(app.getPath('appData'), 'SKA-Billing-Data');
 
-// Force Electron to save ALL data (localStorage, cookies, etc.) in this folder
+// Force Electron to save ALL data (localStorage, cookies, files) here
 app.setPath('userData', dataPath);
 app.setPath('sessionData', dataPath);
 
@@ -21,7 +19,7 @@ process.on('uncaughtException', function(e){
   try { dialog.showErrorBox('SK Aayurveda Billing - Error', String((e && e.stack) || e)); } catch(_) {}
 });
 
-/* Legacy Windows 7 safety switches (fix 0xc0000005 and ffmpeg errors) */
+/* Legacy Windows 7 safety switches */
 app.commandLine.appendSwitch('no-sandbox');
 app.commandLine.appendSwitch('disable-gpu');
 app.commandLine.appendSwitch('disable-software-rasterizer');
