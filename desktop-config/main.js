@@ -12,6 +12,14 @@ app.commandLine.appendSwitch('disable-gpu');
 app.commandLine.appendSwitch('disable-web-security');
 app.commandLine.appendSwitch('allow-file-access-from-files');
 
+/* 
+  FIX FOR PORTABLE APP DATA LOSS:
+  Force Electron to save user data (localStorage, IndexedDB, cookies) 
+  in a fixed location in the AppData folder, NOT the temporary extraction folder.
+*/
+const userDataPath = path.join(app.getPath('appData'), 'SKA-Billing-Data');
+app.setPath('userData', userDataPath);
+
 let win = null;
 
 function findIndex() {
