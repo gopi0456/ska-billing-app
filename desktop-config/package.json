@@ -29,7 +29,7 @@
           "arch": ["ia32"]
         },
         {
-          "target": "portable",
+          "target": "zip",
           "arch": ["ia32"]
         }
       ]
