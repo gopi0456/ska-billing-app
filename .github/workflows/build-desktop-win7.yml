@@ -1,30 +1,19 @@
-name: Build Windows 7 EXE
+      - name: Pre-cache winCodeSign (fix symlink issue)
+        shell: pwsh
+        run: |
+          $cacheDir = "$env:LOCALAPPDATA\electron-builder\Cache\winCodeSign"
+          $targetDir = "$cacheDir\winCodeSign-2.6.0"
+          if (-not (Test-Path $targetDir)) {
+            New-Item -ItemType Directory -Force -Path $cacheDir | Out-Null
+            $url = "https://github.com/electron-userland/electron-builder-binaries/releases/download/winCodeSign-2.6.0/winCodeSign-2.6.0.7z"
+            Invoke-WebRequest -Uri $url -OutFile "$cacheDir\winCodeSign.7z"
+            # Use 7-Zip that comes with the runner
+            7z x "$cacheDir\winCodeSign.7z" -o"$targetDir" -y
+            Remove-Item "$cacheDir\winCodeSign.7z"
+          }
 
-on:
-  push:
-    branches: [ main, master ]
-  workflow_dispatch: # Allows you to trigger the build manually
-
-jobs:
-  build:
-    runs-on: windows-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 18 # Compatible with Electron 22 build tools
-
-      - name: Install dependencies
-        run: npm install
-
-      - name: Build for Windows 7 (ia32)
+      - name: Build NSIS Installer + Portable (Win7, IA32)
+        working-directory: ./desktop-config
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: npm run build:win7
-
-      - name: Upload EXE artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: ska-billing-win7-installer
-          path: dist-desktop/*.exe
