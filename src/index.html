@@ -130,27 +130,26 @@
 <div id="share-modal" class="modal"><div class="modal-content"><span class="modal-close" onclick="closeShareModal()">&times;</span><h3>📤 Share Bill</h3><p id="share-cust-info" style="text-align:center;color:#666;margin:8px 0;"></p><div class="share-options"><button class="btn btn-whatsapp" onclick="shareViaWhatsApp()"><span class="btn-icon">📱</span> WhatsApp</button><button class="btn btn-sms" onclick="shareViaSMS()"><span class="btn-icon">💬</span> SMS</button><button class="btn btn-pdf" onclick="shareViaPDF()"><span class="btn-icon">📄</span> PDF Invoice</button></div></div></div>
 <div id="edit-modal" class="modal"><div class="modal-content"><span class="modal-close" onclick="closeEditModal()">&times;</span><h3>✏️ Edit Bill</h3><div id="edit-bill-content"></div></div></div>
 <div id="add-cust-modal" class="modal"><div class="modal-content"><span class="modal-close" onclick="closeAddCustomerModal()">&times;</span><h3>➕ Add New Customer</h3><div id="add-cust-content"></div></div></div><div id="cust-edit-modal" class="modal"><div class="modal-content"><span class="modal-close" onclick="closeCustEditModal()">&times;</span><h3>✏️ Edit Customer</h3><div id="cust-edit-content"></div></div></div><div id="view-bill-modal" class="modal"><div class="modal-content"><span class="modal-close" onclick="closeViewBillModal()">&times;</span><div id="view-bill-content"></div></div></div>
-<script src="js/billing.js?v=105"></script>
-<script src="js/history.js?v=105"></script>
-<script src="js/requirement.js?v=105"></script>
-<script src="js/settings.js?v=105"></script>
+<script src="js/billing.js?v=106"></script>
+<script src="js/history.js?v=106"></script>
+<script src="js/requirement.js?v=106"></script>
+<script src="js/settings.js?v=106"></script>
 <script>
 const DB={isCapacitor:window.Capacitor!==undefined,sqlite:null,conn:null,data:JSON.parse(localStorage.getItem('ska_db')||'{"customers":[],"products":[],"bills":[],"bill_items":[],"requirements":[],"manual_products":[]}'),async init(){if(this.isCapacitor&&window.CapacitorSQLite){try{this.sqlite=new window.CapacitorSQLite.SQLiteConnection(window.CapacitorSQLite);this.conn=await this.sqlite.createConnection("ska_db",false,"no-encryption",1,false);await this.conn.open();await this.conn.execute(`CREATE TABLE IF NOT EXISTS customers (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, mobile TEXT, customer_type TEXT)`);await this.conn.execute(`CREATE TABLE IF NOT EXISTS products (id INTEGER PRIMARY KEY AUTOINCREMENT, item_name TEXT, mrp REAL, sp REAL, bp REAL)`);await this.conn.execute(`CREATE TABLE IF NOT EXISTS bills (id INTEGER PRIMARY KEY AUTOINCREMENT, bill_number TEXT, customer_id INTEGER, cust_name TEXT, cust_mobile TEXT, customer_type TEXT, date TEXT, total_mrp REAL, total_sp REAL, total_bp REAL, price_columns TEXT, bp_status TEXT, stockist_id TEXT, bp_done_date TEXT, bp_done_remarks TEXT)`);await this.conn.execute(`CREATE TABLE IF NOT EXISTS bill_items (id INTEGER PRIMARY KEY AUTOINCREMENT, bill_id INTEGER, item_name TEXT, mrp REAL, sp REAL, bp REAL, qty INTEGER, tot_mrp REAL, tot_sp REAL, tot_bp REAL)`);await this.conn.execute(`CREATE TABLE IF NOT EXISTS requirements (id INTEGER PRIMARY KEY AUTOINCREMENT, customer TEXT, mobile TEXT, customer_type TEXT, item_name TEXT, qty INTEGER, date TEXT)`);await this.conn.execute(`CREATE TABLE IF NOT EXISTS manual_products (id INTEGER PRIMARY KEY AUTOINCREMENT, item_name TEXT, mrp REAL, sp REAL, bp REAL)`);try{await this.conn.execute(`ALTER TABLE requirements ADD COLUMN customer_type TEXT`)}catch(e){}try{await this.conn.execute(`ALTER TABLE customers ADD COLUMN customer_type TEXT`)}catch(e){}try{await this.conn.execute(`ALTER TABLE bills ADD COLUMN bill_number TEXT`)}catch(e){}try{await this.conn.execute(`ALTER TABLE bills ADD COLUMN bp_status TEXT`)}catch(e){}try{await this.conn.execute(`ALTER TABLE bills ADD COLUMN stockist_id TEXT`)}catch(e){}try{await this.conn.execute(`ALTER TABLE bills ADD COLUMN bp_done_date TEXT`)}catch(e){}try{await this.conn.execute(`ALTER TABLE bills ADD COLUMN bp_done_remarks TEXT`)}catch(e){}try{const eb=await this.conn.query(`SELECT id FROM bills WHERE bill_number IS NULL OR bill_number = ''`);if(eb.values&&eb.values.length>0){for(let i=0;i<eb.values.length;i++){await this.conn.execute(`UPDATE bills SET bill_number = ?, bp_status = COALESCE(bp_status, 'pending') WHERE id = ?`,['SKAA'+String(i+1).padStart(4,'0'),eb.values[i].id])}}await this.conn.execute(`UPDATE bills SET bp_status = 'pending' WHERE bp_status IS NULL OR bp_status = ''`)}catch(e){}}catch(err){this.isCapacitor=false}}else{if(this.data.bills){let c=1;this.data.bills.forEach(b=>{if(!b.bill_number)b.bill_number='SKAA'+String(c++).padStart(4,'0');if(!b.bp_status)b.bp_status='pending'});localStorage.setItem('ska_db',JSON.stringify(this.data))}}if(!this.data.manual_products){this.data.manual_products=[];localStorage.setItem('ska_db',JSON.stringify(this.data))}},async query(t){if(this.isCapacitor&&this.conn){const r=await this.conn.query(`SELECT * FROM ${t}`);return r.values||[]}return this.data[t]||[]},async run(t,item){if(this.isCapacitor&&this.conn){const c=Object.keys(item),v=Object.values(item);if(item.id){try{const check=await this.conn.query(`SELECT id FROM ${t} WHERE id=?`,[item.id]);if(check.values&&check.values.length>0)return item.id}catch(e){}}const r=await this.conn.execute(`INSERT INTO ${t} (${c.join(',')}) VALUES (${c.map(()=>'?').join(',')})`,v);return r.changes.lastId}// --- FIXED DUPLICATE CHECK LOGIC ---
             if (item.id) {
                 const idx = this.data[t].findIndex(x => x.id === item.id);
                 if (idx !== -1) {
-                    // UPDATE existing record (merge new fields into old)
                     this.data[t][idx] = Object.assign({}, this.data[t][idx], item);
                 } else {
-                    // INSERT with provided ID (rare, but valid for restores)
                     this.data[t].push(item);
                 }
+                localStorage.setItem('ska_db', JSON.stringify(this.data));
                 return item.id;
             } else {
-                // GENERATE NEW ID and INSERT
                 const newId = Date.now() * 1000 + ((this._idSeq = (this._idSeq || 0) + 1) % 1000);
                 item.id = newId;
                 this.data[t].push(item);
+                localStorage.setItem('ska_db', JSON.stringify(this.data));
                 return newId;
             } if(!item.id) item.id=Date.now()+Math.random();this.data[t].push(item);localStorage.setItem('ska_db',JSON.stringify(this.data));return item.id},async clear(t){if(this.isCapacitor&&this.conn)await this.conn.execute(`DELETE FROM ${t}`);else{this.data[t]=[];localStorage.setItem('ska_db',JSON.stringify(this.data))}},async update(t,id,u){if(this.isCapacitor&&this.conn){const s=Object.keys(u).map(k=>`${k}=?`).join(',');await this.conn.execute(`UPDATE ${t} SET ${s} WHERE id=?`,[...Object.values(u),id])}else{const i=this.data[t].find(i=>i.id==id);if(i)Object.assign(i,u);localStorage.setItem('ska_db',JSON.stringify(this.data))}},async delete(t,id){if(this.isCapacitor&&this.conn)await this.conn.execute(`DELETE FROM ${t} WHERE id=?`,[id]);else{this.data[t]=this.data[t].filter(r=>r.id.toString()!==id.toString());localStorage.setItem('ska_db',JSON.stringify(this.data))}}};
 
@@ -401,7 +400,7 @@ window.addEventListener('load', () => {
     }, 1000);
 });
 </script>
-<script src="js/users.js?v=105"></script>
+<script src="js/users.js?v=106"></script>
 <script>
 // ==== EVENT DELEGATION FOR CART QUANTITY ====
 document.addEventListener('DOMContentLoaded', function() {
