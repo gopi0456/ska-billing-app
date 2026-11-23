@@ -33,3 +33,8 @@ backups/
 build.sh
 *.bak-*
 backups/
+desktop-config/node_modules/
+desktop-config/dist-web/
+dist-desktop/
+*.bak_*
+ska-diag*.txt
