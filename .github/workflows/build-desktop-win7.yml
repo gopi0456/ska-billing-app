@@ -1,4 +1,4 @@
-name: Build Windows 7 Installer
+name: Build Windows 7 Installer & ZIP
 
 on:
   push:
@@ -32,15 +32,31 @@ jobs:
         working-directory: ./desktop-config
         run: npm install
 
-      - name: Build NSIS Installer + Portable (Win7, IA32)
+      - name: Pre-cache winCodeSign (fix symlink issue)
+        shell: pwsh
+        run: |
+          $cacheDir = "$env:LOCALAPPDATA\electron-builder\Cache\winCodeSign"
+          $targetDir = "$cacheDir\winCodeSign-2.6.0"
+          if (-not (Test-Path $targetDir)) {
+            New-Item -ItemType Directory -Force -Path $cacheDir | Out-Null
+            $url = "https://github.com/electron-userland/electron-builder-binaries/releases/download/winCodeSign-2.6.0/winCodeSign-2.6.0.7z"
+            Invoke-WebRequest -Uri $url -OutFile "$cacheDir\winCodeSign.7z"
+            7z x "$cacheDir\winCodeSign.7z" -o"$targetDir" -y
+            Remove-Item "$cacheDir\winCodeSign.7z"
+          }
+
+      - name: Build NSIS Installer & ZIP
         working-directory: ./desktop-config
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
         run: npm run build:win7
 
       - name: Upload Artifact
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: SKA-Billing-Win7-Setup
-          path: dist-desktop/*.exe
+          name: SKA-Billing-Win7-Build
+          path: dist-desktop/
           retention-days: 30
+          if-no-files-found: warn
