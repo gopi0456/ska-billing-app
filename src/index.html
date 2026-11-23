@@ -130,10 +130,10 @@
 <div id="share-modal" class="modal"><div class="modal-content"><span class="modal-close" onclick="closeShareModal()">&times;</span><h3>📤 Share Bill</h3><p id="share-cust-info" style="text-align:center;color:#666;margin:8px 0;"></p><div class="share-options"><button class="btn btn-whatsapp" onclick="shareViaWhatsApp()"><span class="btn-icon">📱</span> WhatsApp</button><button class="btn btn-sms" onclick="shareViaSMS()"><span class="btn-icon">💬</span> SMS</button><button class="btn btn-pdf" onclick="shareViaPDF()"><span class="btn-icon">📄</span> PDF Invoice</button></div></div></div>
 <div id="edit-modal" class="modal"><div class="modal-content"><span class="modal-close" onclick="closeEditModal()">&times;</span><h3>✏️ Edit Bill</h3><div id="edit-bill-content"></div></div></div>
 <div id="add-cust-modal" class="modal"><div class="modal-content"><span class="modal-close" onclick="closeAddCustomerModal()">&times;</span><h3>➕ Add New Customer</h3><div id="add-cust-content"></div></div></div><div id="cust-edit-modal" class="modal"><div class="modal-content"><span class="modal-close" onclick="closeCustEditModal()">&times;</span><h3>✏️ Edit Customer</h3><div id="cust-edit-content"></div></div></div><div id="view-bill-modal" class="modal"><div class="modal-content"><span class="modal-close" onclick="closeViewBillModal()">&times;</span><div id="view-bill-content"></div></div></div>
-<script src="js/billing.js?v=106"></script>
-<script src="js/history.js?v=106"></script>
-<script src="js/requirement.js?v=106"></script>
-<script src="js/settings.js?v=106"></script>
+<script src="js/billing.js?v=112"></script>
+<script src="js/history.js?v=112"></script>
+<script src="js/requirement.js?v=112"></script>
+<script src="js/settings.js?v=112"></script>
 <script>
 const DB={isCapacitor:window.Capacitor!==undefined,sqlite:null,conn:null,data:JSON.parse(localStorage.getItem('ska_db')||'{"customers":[],"products":[],"bills":[],"bill_items":[],"requirements":[],"manual_products":[]}'),async init(){if(this.isCapacitor&&window.CapacitorSQLite){try{this.sqlite=new window.CapacitorSQLite.SQLiteConnection(window.CapacitorSQLite);this.conn=await this.sqlite.createConnection("ska_db",false,"no-encryption",1,false);await this.conn.open();await this.conn.execute(`CREATE TABLE IF NOT EXISTS customers (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, mobile TEXT, customer_type TEXT)`);await this.conn.execute(`CREATE TABLE IF NOT EXISTS products (id INTEGER PRIMARY KEY AUTOINCREMENT, item_name TEXT, mrp REAL, sp REAL, bp REAL)`);await this.conn.execute(`CREATE TABLE IF NOT EXISTS bills (id INTEGER PRIMARY KEY AUTOINCREMENT, bill_number TEXT, customer_id INTEGER, cust_name TEXT, cust_mobile TEXT, customer_type TEXT, date TEXT, total_mrp REAL, total_sp REAL, total_bp REAL, price_columns TEXT, bp_status TEXT, stockist_id TEXT, bp_done_date TEXT, bp_done_remarks TEXT)`);await this.conn.execute(`CREATE TABLE IF NOT EXISTS bill_items (id INTEGER PRIMARY KEY AUTOINCREMENT, bill_id INTEGER, item_name TEXT, mrp REAL, sp REAL, bp REAL, qty INTEGER, tot_mrp REAL, tot_sp REAL, tot_bp REAL)`);await this.conn.execute(`CREATE TABLE IF NOT EXISTS requirements (id INTEGER PRIMARY KEY AUTOINCREMENT, customer TEXT, mobile TEXT, customer_type TEXT, item_name TEXT, qty INTEGER, date TEXT)`);await this.conn.execute(`CREATE TABLE IF NOT EXISTS manual_products (id INTEGER PRIMARY KEY AUTOINCREMENT, item_name TEXT, mrp REAL, sp REAL, bp REAL)`);try{await this.conn.execute(`ALTER TABLE requirements ADD COLUMN customer_type TEXT`)}catch(e){}try{await this.conn.execute(`ALTER TABLE customers ADD COLUMN customer_type TEXT`)}catch(e){}try{await this.conn.execute(`ALTER TABLE bills ADD COLUMN bill_number TEXT`)}catch(e){}try{await this.conn.execute(`ALTER TABLE bills ADD COLUMN bp_status TEXT`)}catch(e){}try{await this.conn.execute(`ALTER TABLE bills ADD COLUMN stockist_id TEXT`)}catch(e){}try{await this.conn.execute(`ALTER TABLE bills ADD COLUMN bp_done_date TEXT`)}catch(e){}try{await this.conn.execute(`ALTER TABLE bills ADD COLUMN bp_done_remarks TEXT`)}catch(e){}try{const eb=await this.conn.query(`SELECT id FROM bills WHERE bill_number IS NULL OR bill_number = ''`);if(eb.values&&eb.values.length>0){for(let i=0;i<eb.values.length;i++){await this.conn.execute(`UPDATE bills SET bill_number = ?, bp_status = COALESCE(bp_status, 'pending') WHERE id = ?`,['SKAA'+String(i+1).padStart(4,'0'),eb.values[i].id])}}await this.conn.execute(`UPDATE bills SET bp_status = 'pending' WHERE bp_status IS NULL OR bp_status = ''`)}catch(e){}}catch(err){this.isCapacitor=false}}else{if(this.data.bills){let c=1;this.data.bills.forEach(b=>{if(!b.bill_number)b.bill_number='SKAA'+String(c++).padStart(4,'0');if(!b.bp_status)b.bp_status='pending'});localStorage.setItem('ska_db',JSON.stringify(this.data))}}if(!this.data.manual_products){this.data.manual_products=[];localStorage.setItem('ska_db',JSON.stringify(this.data))}},async query(t){if(this.isCapacitor&&this.conn){const r=await this.conn.query(`SELECT * FROM ${t}`);return r.values||[]}return this.data[t]||[]},async run(t,item){if(this.isCapacitor&&this.conn){const c=Object.keys(item),v=Object.values(item);if(item.id){try{const check=await this.conn.query(`SELECT id FROM ${t} WHERE id=?`,[item.id]);if(check.values&&check.values.length>0)return item.id}catch(e){}}const r=await this.conn.execute(`INSERT INTO ${t} (${c.join(',')}) VALUES (${c.map(()=>'?').join(',')})`,v);return r.changes.lastId}// --- FIXED DUPLICATE CHECK LOGIC ---
             if (item.id) {
@@ -400,7 +400,7 @@ window.addEventListener('load', () => {
     }, 1000);
 });
 </script>
-<script src="js/users.js?v=106"></script>
+<script src="js/users.js?v=112"></script>
 <script>
 // ==== EVENT DELEGATION FOR CART QUANTITY ====
 document.addEventListener('DOMContentLoaded', function() {
@@ -730,6 +730,233 @@ document.addEventListener('DOMContentLoaded', function() {
   }
   installGen5();
   setInterval(installGen5,600);
+})();
+</script>
+
+
+
+<script>
+/* SKA_CUSTOMER_LOGIC_v1 */
+(function(){
+  var STAMPS=['__skaPatched','__skaUnit','__skaComment','__skaStats','__skaStats2','__skaClean','__skaBoth','__skaLeaf','__skaUnitComment','__skaUnitPdf','__skaTextPatched','__skaShareV2','__skaShareV3','__skaBpCustomerFix','__skaBpCustomerV2'];
+  var GREY='#9ca3af';
+  var CARD_SEL='.bill-item,.cust-item,.cust-item-req,.mgmt-cust-item,[class*="bill-card"],[class*="bill-item"]';
+
+  function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+  function grey(el){el.style.color=GREY;el.style.opacity='0.6';}
+  function typeOfCard(card){
+    if(!card)return null;
+    var b=card.querySelectorAll('.customer-type-badge,[class*="type-badge"],.type-customer,.type-stockist,.type-distributor');
+    for(var i=0;i<b.length;i++){
+      var t=(b[i].textContent||'').trim().toUpperCase();
+      if(t==='CUSTOMER')return 'customer';
+      if(t==='STOCKIST')return 'stockist';
+      if(t==='DISTRIBUTOR')return 'distributor';
+    }
+    var m=(card.textContent||'').match(/\b(CUSTOMER|STOCKIST|DISTRIBUTOR)\b/);
+    return m?m[1].toLowerCase():null;
+  }
+  function zeroBpLeaf(el){
+    var t=(el.textContent||'').trim();
+    if(!/^[\d.,]+\s*BP$/.test(t))return false;
+    if(t==='0.00 BP'&&el.getAttribute('data-ska-cbp')==='1')return true;
+    el.textContent='0.00 BP';grey(el);el.setAttribute('data-ska-cbp','1');
+    return true;
+  }
+  function fixInlineBp(el){
+    var t=(el.textContent||'');
+    if(t.indexOf('BP:')===-1||t.length>140)return false;
+    if(el.getAttribute('data-ska-cbp')==='1'&&/BP:\s*0\.00/.test(t))return true;
+    var i=t.indexOf('BP:');
+    var head=t.slice(0,i);
+    var rest=t.slice(i).replace(/BP:\s*[\d.,]+/,'BP: 0.00');
+    el.innerHTML=esc(head)+'<span style="color:'+GREY+';opacity:.65">'+esc(rest)+'</span>';
+    el.setAttribute('data-ska-cbp','1');
+    return true;
+  }
+  function disableBtn(b){
+    if(b.getAttribute('data-ska-cbp')==='1')return;
+    b.setAttribute('data-ska-cbp','1');
+    try{b.disabled=true;}catch(e){}
+    b.setAttribute('aria-disabled','true');
+    b.style.opacity='0.45';
+    b.style.cursor='not-allowed';
+    b.style.pointerEvents='none';
+    b.style.background='linear-gradient(135deg,#9ca3af,#6b7280)';
+    b.style.borderColor='#9ca3af';
+  }
+  function fixCards(){
+    var cards=document.querySelectorAll(CARD_SEL);
+    Array.prototype.forEach.call(cards,function(card){
+      if(typeOfCard(card)!=='customer')return;
+      Array.prototype.forEach.call(card.querySelectorAll('*'),function(el){
+        if(el.children.length)return;
+        var t=(el.textContent||'').trim();
+        if(zeroBpLeaf(el))return;
+        if(/BP:\s*[\d.,]+/.test(t)){fixInlineBp(el);return;}
+        if(/^BP\s*(PENDING|DONE|PAID)$/i.test(t)){grey(el);el.setAttribute('data-ska-cbp','1');}
+      });
+      Array.prototype.forEach.call(card.querySelectorAll('button,[onclick],.btn'),function(b){
+        if(/BP\s*Done/i.test(b.textContent||''))disableBtn(b);
+      });
+    });
+  }
+  function fixSummary(){
+    var isCust=false;
+    try{
+      if(typeof currentCustomerBills!=='undefined'&&Array.isArray(currentCustomerBills)&&currentCustomerBills.length){
+        isCust=currentCustomerBills.every(function(b){return String(b.customer_type||'').toLowerCase()==='customer';});
+      }
+    }catch(e){}
+    if(!isCust)return;
+    Array.prototype.forEach.call(document.querySelectorAll('.summary-grid,.month-card,[class*="summary"],[class*="month"]'),function(r){
+      Array.prototype.forEach.call(r.querySelectorAll('*'),function(el){
+        if(el.children.length)return;
+        zeroBpLeaf(el);
+      });
+    });
+  }
+  function visibleModal(){
+    var ms=document.querySelectorAll('.modal');
+    for(var i=0;i<ms.length;i++){
+      var st=getComputedStyle(ms[i]);
+      if(st.display!=='none'&&st.visibility!=='hidden'){
+        var mc=ms[i].querySelector('.modal-content');
+        if(mc)return mc;
+      }
+    }
+    return null;
+  }
+  function fixViewModal(){
+    var isCust=false;
+    try{isCust=typeof csbill!=='undefined'&&csbill&&String(csbill.customer_type||'').toLowerCase()==='customer';}catch(e){}
+    if(!isCust)return;
+    var mc=visibleModal();if(!mc)return;
+    Array.prototype.forEach.call(mc.querySelectorAll('table'),function(tb){
+      var idx=-1;
+      Array.prototype.forEach.call(tb.querySelectorAll('thead th'),function(th,i){
+        if(/\bBP\b/.test(th.textContent||''))idx=i;
+      });
+      if(idx<0)return;
+      Array.prototype.forEach.call(tb.querySelectorAll('tbody tr'),function(tr){
+        var td=tr.children[idx];
+        if(td&&td.textContent.trim()!=='0.00'){td.textContent='0.00';grey(td);}
+      });
+    });
+    Array.prototype.forEach.call(mc.querySelectorAll('*'),function(el){
+      if(el.children.length)return;
+      var t=(el.textContent||'').trim();
+      if(/^Total\s*BP/i.test(t)){
+        if(!/0\.00\s*$/.test(t))el.textContent='Total BP: Rs. 0.00';
+        grey(el);return;
+      }
+      if(zeroBpLeaf(el))return;
+      if(/BP:\s*[\d.,]+/.test(t)&&t.length<140){fixInlineBp(el);return;}
+      if(/^BP\s*(PENDING|DONE|PAID)$/i.test(t))grey(el);
+    });
+  }
+
+  /* ---------- SHARE TEXT: stockist=MRP+DP+BP | distributor=MRP+BP | customer=MRP only ---------- */
+  function cleanName(name){
+    if(!name)return '';
+    var s=String(name);
+    s=s.replace(/\s*\(P½\)/gi,'');
+    s=s.replace(/\s*\(\s*(?:buy|get|offer|free|combo|pack|\d+\s*\+\s*\d+)[^)]*\)\s*/gi,'');
+    s=s.replace(/\s*\[\s*(?:buy|get|offer|free|combo|pack|\d+\s*\+\s*\d+)[^\]]*\]\s*/gi,'');
+    s=s.replace(/\s*(?:buy\s+\d+\s+get\s+\d+(?:\s+free)?|offer|combo\s+pack|value\s+pack|\d+\s*\+\s*\d+\s*(?:offer|free|pack)?|free\s+gift|special\s+offer)\s*/gi,'');
+    s=s.replace(/\s*-\s*(?:offer|combo|pack|free|buy\s+\d+|get\s+\d+)[^-]*$/gi,'');
+    s=s.replace(/\s*\|\s*(?:offer|combo|pack|free|buy|get)[^|]*$/gi,'');
+    s=s.replace(/[,.;:\-|]+\s*$/,'');
+    s=s.replace(/\s+/g,' ').trim();
+    return s||String(name);
+  }
+  function money(v){return Number(v||0).toFixed(2);}
+  function buildText(){
+    var b=null,it=[];
+    try{b=typeof csbill!=='undefined'?csbill:null;it=(typeof csbi!=='undefined'&&Array.isArray(csbi))?csbi:[];}catch(e){}
+    if(!b||!it.length)return '';
+    var type=String(b.customer_type||'').toLowerCase();
+    var u=null;try{u=curUser();}catch(e){}
+    var shop=(u&&u.shop_name)?u.shop_name.toUpperCase():'SK AAYURVEDA';
+    var sub=(u&&u.subtitle)?u.subtitle.toUpperCase():'KEVA SUPER STOCK POINT';
+    var L=[];
+    L.push('*'+shop+'*');
+    L.push(sub);
+    L.push('-------------------------');
+    L.push('Bill No: *'+(b.bill_number||'')+'*');
+    L.push('Date: '+new Date(b.date).toLocaleString());
+    L.push('-------------------------');
+    L.push('Customer: '+(b.cust_name||''));
+    L.push('Type: '+type.toUpperCase());
+    if(b.cust_mobile)L.push('Mobile: '+b.cust_mobile);
+    if(b.stockist_id)L.push((type==='distributor'?'Distributor ID':'Stockist ID')+': *'+b.stockist_id+'*');
+    L.push('');
+    L.push('*ITEMS:*');
+    it.forEach(function(x,i){
+      var nm=(type==='stockist')?String(x.item_name||''):cleanName(x.item_name);
+      if(type==='stockist'&&String(x.unit||'').toLowerCase()==='p')nm+=' (P½)';
+      var q=Number(x.qty||1),m=Number(x.mrp||0),s=Number(x.sp||0),bp=Number(x.bp||0);
+      L.push((i+1)+'. '+nm);
+      if(type==='stockist'){
+        L.push('   Qty: '+q+' | MRP: Rs. '+money(m)+' | DP: Rs. '+money(s)+' | BP: Rs. '+money(bp));
+        L.push('   Total MRP: Rs. '+money(m*q)+' | Total DP: Rs. '+money(s*q)+' | Total BP: Rs. '+money(bp*q));
+      }else if(type==='distributor'){
+        L.push('   Qty: '+q+' | MRP: Rs. '+money(m)+' | BP: Rs. '+money(bp));
+        L.push('   Total MRP: Rs. '+money(m*q)+' | Total BP: Rs. '+money(bp*q));
+      }else{
+        L.push('   Qty: '+q+' | MRP: Rs. '+money(m));
+        L.push('   Total MRP: Rs. '+money(m*q));
+      }
+    });
+    L.push('-------------------------');
+    if(type==='customer'){
+      L.push('*Total MRP: Rs. '+money(b.total_mrp)+'*');
+    }else{
+      L.push('Total MRP: Rs. '+money(b.total_mrp));
+      if(type==='stockist')L.push('Total DP: Rs. '+money(b.total_sp));
+      L.push('*Total BP: Rs. '+money(b.total_bp)+'*');
+    }
+    if(b.comments&&String(b.comments).trim()){
+      L.push('');
+      L.push('📝 Note: '+String(b.comments).trim());
+    }
+    L.push('');
+    L.push('Thank you! 🙏');
+    L.push('*Please visit again!* ✨');
+    return L.join('\n');
+  }
+  function installShare(){
+    if(window.getBillText&&window.getBillText.__skaCustomerLogic)return;
+    var orig=window.getBillText;
+    var f=function(){return buildText();};
+    STAMPS.forEach(function(k){if(orig&&orig[k])f[k]=true;});
+    f.__skaCustomerLogic=true;
+    window.getBillText=f;
+  }
+
+  /* Hard block: BP Done can never fire on a customer bill */
+  if(!window.__skaCbpClickGuard){
+    window.__skaCbpClickGuard=true;
+    document.addEventListener('click',function(e){
+      var t=e.target;
+      var b=(t&&t.closest)?t.closest('button,[onclick],.btn'):null;
+      if(!b||!/BP\s*Done/i.test(b.textContent||''))return;
+      var card=b.closest?b.closest(CARD_SEL+',.card'):null;
+      if(card&&typeOfCard(card)==='customer'){e.preventDefault();e.stopPropagation();}
+    },true);
+  }
+
+  function pass(){fixCards();fixSummary();fixViewModal();installShare();}
+  pass();
+  setInterval(pass,450);
+  if(!window.__skaCbpObserver){
+    window.__skaCbpObserver=true;
+    var pend=false;
+    new MutationObserver(function(){
+      if(pend)return;pend=true;
+      setTimeout(function(){pend=false;fixCards();fixSummary();fixViewModal();},60);
+    }).observe(document.body,{childList:true,subtree:true});
+  }
 })();
 </script>
 
